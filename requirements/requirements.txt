@@ -1,9 +1,9 @@
 # bdh
 torch
 numpy
+cupy
 requests
 
 # sim
 pybullet
-pybullet_data
 pybullet_industrial
