@@ -1,3 +1,6 @@
 [submodule "src/rl/bdh"]
 	path = src/rl/bdh
 	url = https://github.com/Ein41R/bdh
+[submodule "assets/urdf"]
+	path = assets/urdf
+	url = https://github.com/Ein41R/ROS2-urdf-Universal-Robots

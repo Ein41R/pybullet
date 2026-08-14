@@ -1,0 +1,9 @@
+# bdh
+torch
+numpy
+requests
+
+# sim
+pybullet
+pybullet_data
+pybullet_industrial
