@@ -1,5 +1,5 @@
 bullet3
 lib*
 bin
-sensorstream*
+sensorstream_driver/*
 share
