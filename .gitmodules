@@ -4,3 +4,9 @@
 [submodule "assets/urdf"]
 	path = assets/urdf
 	url = https://github.com/Ein41R/ROS2-urdf-Universal-Robots
+[submodule "assets/Universal_Robots/urdf"]
+	path = assets/Universal_Robots/urdf
+	url = https://github.com/Ein41R/ROS2-urdf-Universal-Robots
+[submodule "assets/Universal_Robots/assets/bullet3"]
+	path = assets/Universal_Robots/assets/bullet3
+	url = https://github.com/bulletphysics/bullet3
