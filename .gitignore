@@ -1,5 +1,61 @@
-bullet3
-lib*
-bin
-sensorstream_driver/*
-share
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environment
+pyvenv.cfg
+bin/
+include/
+
+# ROS
+*.swp
+.DS_Store
+*.orig
+*~
+
+# IDE
+.vscode/
+.idea/
+
+# Data
+data/
+logs/
+*.log
+*.sqlite
+*.db
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Dependency directories (don't commit these)
+vendor/
+third_party/
+external/
+
+# Test output
+.coverage
+.tox/
+.pytest_cache/
