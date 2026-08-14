@@ -62,3 +62,11 @@ external/
 
 # GitHub
 .github/
+
+# colcon
+build/
+install/
+log/
+
+# misc
+tmp.md
