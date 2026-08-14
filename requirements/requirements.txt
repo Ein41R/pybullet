@@ -1,7 +1,7 @@
 # bdh
 torch
 numpy
-cupy
+cupy-cuda12x
 requests
 
 # sim
