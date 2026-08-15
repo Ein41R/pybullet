@@ -10,17 +10,22 @@ import pybullet_industrial as pi
 from dotenv import load_dotenv
 
 # Loading environment variables from .env.development file in project root
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 home = Path.home()
 load_dotenv(f"{home}/Dev/pybullet/.env.development")
-PYBULLET_DATA_PATH = os.getenv("PYBULLET_DATA_PATH")
-URDF_PATH = os.getenv("URDF_PATH")
+PYBULLET_DATA_PATH = os.getenv("PYBULLET_DATA_PATH") or pybullet_data.getDataPath()
+URDF_PATH = Path(os.getenv("URDF_PATH") or PROJECT_ROOT / "assets" / "ur10e.urdf")
+
+if not URDF_PATH.exists():
+    raise FileNotFoundError(f"URDF file not found: {URDF_PATH}")
+
 
 if __name__ == "__main__":
     p.connect(p.GUI)
-    
-    # Set PyBullet data path
+
+    # Set PyBullet search path for bundled model files
     p.setAdditionalSearchPath(PYBULLET_DATA_PATH)
-    
+
     # Set physics parameters
     p.setGravity(0, 0, -9.81)
     p.setTimeStep(1.0 / 240.0)
@@ -34,7 +39,7 @@ if __name__ == "__main__":
 
     start_position = cp.array([0, 0, 0.585])
     start_orientation = p.getQuaternionFromEuler([0, 0, 0])
-    ur10e = pi.RobotBase(URDF_PATH, start_position, start_orientation)
+    ur10e = pi.RobotBase(str(URDF_PATH), start_position, start_orientation)
 
     # Tuple[List[str], List[int]], being joint names and joint indices
     movable_joints = ur10e.get_moveable_joints()
