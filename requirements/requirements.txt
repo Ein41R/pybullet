@@ -3,6 +3,7 @@ torch
 numpy
 cupy-cuda12x
 requests
+python-dotenv
 
 # sim
 pybullet

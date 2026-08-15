@@ -2,6 +2,7 @@
 # setupEnv.sh
 
 # This script sets up the environment variables for the project.
+# automatically generated file
 
 f [ -f .env ]; then
     export $(grep -v '^#' .env | xargs)
