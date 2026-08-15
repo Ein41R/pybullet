@@ -10,3 +10,9 @@
 [submodule "assets/Universal_Robots/assets/bullet3"]
 	path = assets/Universal_Robots/assets/bullet3
 	url = https://github.com/bulletphysics/bullet3
+[submodule "assets/assets/bullet3"]
+	path = assets/assets/bullet3
+	url = https://github.com/bulletphysics/bullet3
+[submodule "assets/bullet3"]
+	path = assets/bullet3
+	url = https://github.com/bulletphysics/bullet3
