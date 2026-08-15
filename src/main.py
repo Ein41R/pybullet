@@ -15,17 +15,28 @@ load_dotenv(f"{home}/Dev/pybullet/.env.development")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PYBULLET_DATA_PATH = os.getenv("PYBULLET_DATA_PATH") or pybullet_data.getDataPath()
-URDF_PATH = Path(os.getenv("URDF_PATH") or PROJECT_ROOT / "assets" / "ur10e.urdf")
-ASSET_PATH = Path(os.getenv("ASSET_PATH") or PROJECT_ROOT / "assets" / "bullet3" / "data")
+URDF_PATH = os.getenv("URDF_PATH") or str(PROJECT_ROOT / "assets" / "ur10e.urdf")
+ROS_URDF_PACKAGE_PATH = PROJECT_ROOT / "assets" / "Universal_Robots" / "install" / "ur_description" / "share" / "ur_description"
 
-if not URDF_PATH.exists():
-    raise FileNotFoundError(f"URDF file not found: {URDF_PATH}")
+urdf_file = Path(URDF_PATH)
+if not urdf_file.exists():
+    raise FileNotFoundError(f"URDF file not found: {urdf_file}")
+
+if "package://ur_description/" in urdf_file.read_text(encoding="utf-8"):
+    fixed_urdf = PROJECT_ROOT / "assets" / "ur10e_fixed.urdf"
+    fixed_urdf.write_text(
+        urdf_file.read_text(encoding="utf-8").replace(
+            "package://ur_description/",
+            str(ROS_URDF_PACKAGE_PATH.as_posix()) + "/",
+        ),
+        encoding="utf-8",
+    )
+    URDF_PATH = str(fixed_urdf)
 
 
 if __name__ == "__main__":
     p.connect(p.GUI)
 
-    # Set PyBullet search path for bundled model files
     p.setAdditionalSearchPath(PYBULLET_DATA_PATH)
 
     # Set physics parameters
