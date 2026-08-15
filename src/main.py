@@ -10,11 +10,13 @@ import pybullet_industrial as pi
 from dotenv import load_dotenv
 
 # Loading environment variables from .env.development file in project root
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 home = Path.home()
 load_dotenv(f"{home}/Dev/pybullet/.env.development")
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PYBULLET_DATA_PATH = os.getenv("PYBULLET_DATA_PATH") or pybullet_data.getDataPath()
 URDF_PATH = Path(os.getenv("URDF_PATH") or PROJECT_ROOT / "assets" / "ur10e.urdf")
+ASSET_PATH = Path(os.getenv("ASSET_PATH") or PROJECT_ROOT / "assets" / "bullet3" / "data")
 
 if not URDF_PATH.exists():
     raise FileNotFoundError(f"URDF file not found: {URDF_PATH}")
