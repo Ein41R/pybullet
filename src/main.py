@@ -18,10 +18,12 @@ PYBULLET_DATA_PATH = os.getenv("PYBULLET_DATA_PATH") or pybullet_data.getDataPat
 URDF_PATH = os.getenv("URDF_PATH") or str(PROJECT_ROOT / "assets" / "ur10e.urdf")
 ROS_URDF_PACKAGE_PATH = PROJECT_ROOT / "assets" / "Universal_Robots" / "install" / "ur_description" / "share" / "ur_description"
 
+# check if file exists, idk copilot added it
 urdf_file = Path(URDF_PATH)
 if not urdf_file.exists():
     raise FileNotFoundError(f"URDF file not found: {urdf_file}")
 
+# replacing package:// ros style URI with absolute path, since I have no fucking idea what is causing the issue
 if "package://ur_description/" in urdf_file.read_text(encoding="utf-8"):
     fixed_urdf = PROJECT_ROOT / "assets" / "ur10e_fixed.urdf"
     fixed_urdf.write_text(
@@ -35,14 +37,17 @@ if "package://ur_description/" in urdf_file.read_text(encoding="utf-8"):
 
 
 if __name__ == "__main__":
+    #setup pybullet simulation
     p.connect(p.GUI)
 
+    # Set the additional search path for PyBullet data
     p.setAdditionalSearchPath(PYBULLET_DATA_PATH)
 
     # Set physics parameters
     p.setGravity(0, 0, -9.81)
     p.setTimeStep(1.0 / 240.0)
 
+    # from old deprecaed project copy pasted
     p.loadURDF("plane.urdf", basePosition=[0, 0, -0.001])
     p.loadURDF("table/table.urdf", basePosition=[0, 0.5, -0.001], baseOrientation=p.getQuaternionFromEuler([0, 0, cp.pi / 2]))
     sphere = p.loadURDF("sphere_small.urdf", basePosition=[0, 1, 1.5], globalScaling=1.5)
@@ -54,9 +59,6 @@ if __name__ == "__main__":
     start_orientation = p.getQuaternionFromEuler([0, 0, 0])
     ur10e = pi.RobotBase(str(URDF_PATH), start_position, start_orientation)
 
-    # Tuple[List[str], List[int]], being joint names and joint indices
-    movable_joints = ur10e.get_moveable_joints()
-    
     while True:
-        sphere_pos, sphere_orn = p.getBasePositionAndOrientation(sphere)
-        ur10e.goto_joint_positions(sphere_pos, sphere_orn, max_steps=10)
+        p.stepSimulation()
+        time.sleep(1.0 / 240.0)
