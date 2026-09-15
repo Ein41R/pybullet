@@ -2,12 +2,13 @@ import os
 import time
 from pathlib import Path
 
-import cupy as cp
 import pybullet as p
 import pybullet_data
-import pybullet_industrial as pi
+import rclpy #import ros client lib
 
 from dotenv import load_dotenv
+
+from ros2_bridge import PyBulletRosBridge
 
 # Loading environment variables from .env.development file in project root
 home = Path.home()
@@ -49,16 +50,49 @@ if __name__ == "__main__":
 
     # from old deprecaed project copy pasted
     p.loadURDF("plane.urdf", basePosition=[0, 0, -0.001])
-    p.loadURDF("table/table.urdf", basePosition=[0, 0.5, -0.001], baseOrientation=p.getQuaternionFromEuler([0, 0, cp.pi / 2]))
+    p.loadURDF("table/table.urdf", basePosition=[0, 0.5, -0.001], baseOrientation=p.getQuaternionFromEuler([0, 0, 1.57079632679]))
     sphere = p.loadURDF("sphere_small.urdf", basePosition=[0, 1, 1.5], globalScaling=1.5)
 
     #the sphere is too fast
     p.changeDynamics(sphere, -1, linearDamping=0.99, angularDamping=0.99)
 
-    start_position = cp.array([0, 0, 0.585])
+    start_position = [0, 0, 0.585]
     start_orientation = p.getQuaternionFromEuler([0, 0, 0])
-    ur10e = pi.RobotBase(str(URDF_PATH), start_position, start_orientation)
+    ur10e = p.loadURDF(
+        str(URDF_PATH),
+        basePosition=start_position,
+        baseOrientation=start_orientation,
+        useFixedBase=True,
+    )
 
-    while True:
-        p.stepSimulation()
-        time.sleep(1.0 / 240.0)
+    joint_names = [
+        "shoulder_pan_joint",
+        "shoulder_lift_joint",
+        "elbow_joint",
+        "wrist_1_joint",
+        "wrist_2_joint",
+        "wrist_3_joint",
+    ]
+    joint_indices = [
+        next(
+            index
+            for index in range(p.getNumJoints(ur10e))
+            if p.getJointInfo(ur10e, index)[1].decode() == name
+        )
+        for name in joint_names
+    ]
+
+    rclpy.init()
+    bridge = PyBulletRosBridge(ur10e, joint_indices, joint_names)
+
+    try:
+        while rclpy.ok() and p.isConnected():
+            rclpy.spin_once(bridge, timeout_sec=0.0)
+            bridge.apply_targets(p)
+            p.stepSimulation()
+            bridge.publish_joint_states(p)
+            time.sleep(1.0 / 240.0)
+    finally:
+        bridge.destroy_node()
+        rclpy.shutdown()
+        p.disconnect()
