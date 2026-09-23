@@ -4,11 +4,12 @@ from pathlib import Path
 
 import pybullet as p
 import pybullet_data
-import rclpy #import ros client lib
+import rclpy
 
 from dotenv import load_dotenv
 
 from ros2_bridge import PyBulletRosBridge
+from sensor_msgs.msg import JointState
 
 # Loading environment variables from .env.development file in project root
 home = Path.home()
@@ -65,34 +66,28 @@ if __name__ == "__main__":
         useFixedBase=True,
     )
 
-    ###setup ros2 bridge
+    # hardcoding ur10e joint specification.
     joint_names = [
-        "shoulder_pan_joint",
-        "shoulder_lift_joint",
+        "shoulder_pan_joint", # base Joint
+        "shoulder_lift_joint", # Shoulder Joint
         "elbow_joint",
         "wrist_1_joint",
         "wrist_2_joint",
         "wrist_3_joint",
     ]
+
     joint_indices = [
-        next(
-            index
-            for index in range(p.getNumJoints(ur10e))
-            if p.getJointInfo(ur10e, index)[1].decode() == name
-        )
-        for name in joint_names
+        p.getJointInfo(ur10e, i)[0] for i in range(p.getNumJoints(ur10e))
     ]
 
-    #initialize ros node/DDS in publisher/subscriber mode, and create the bridge object
+    # Initialize the ROS 2 node.
     rclpy.init()
-    bridge = PyBulletRosBridge(ur10e, joint_indices, joint_names)
+    bridge = PyBulletRosBridge(joint_names, joint_indices, ur10e)
 
     try:
         while rclpy.ok() and p.isConnected():
             rclpy.spin_once(bridge, timeout_sec=0.0)
-            bridge.apply_targets(p)
             p.stepSimulation()
-            bridge.publish_joint_states(p)
             time.sleep(1.0 / 240.0)
     finally:
         bridge.destroy_node()

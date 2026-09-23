@@ -1,59 +1,48 @@
-import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import JointState
-from trajectory_msgs.msg import JointTrajectory
+from sensor_msgs.msg import JointState #https://docs.ros.org/en/noetic/api/sensor_msgs/html/msg/JointState.html
+import pybullet as p
 
 # TLDR:
-# publishes joint states to /joint_states topic
-# subscribes to /joint_trajectory_controller/joint_trajectory topic --> applies in sim
-
+# publishes     »   /joint_states
+# subscribes    »   /follow_joint_trajectory/joint_ctrl
 
 class PyBulletRosBridge(Node):
-    ### initializing Ros 2 node to bridge the pybullet simulation with ros 2 topics
-    def __init__(self, robot_id, joint_indices, joint_names): #constructor
-        super().__init__("pybullet_bridge")
-        self.robot_id = robot_id
-        self.joint_indices = joint_indices
+    def __init__(self, joint_names, joint_indices, ur10e):
         self.joint_names = joint_names
-        self.target_positions = [0.0] * len(joint_indices)
+        self.joint_indices = joint_indices
+        self.ur10e = ur10e
 
-        self.create_subscription(#subscribe to the joint trajectory topic (created by controller)
-            JointTrajectory,
-            "/joint_trajectory_controller/joint_trajectory",
-            self.on_trajectory, #publish callback function
-            10, #buffer size
-        )
-        self.joint_states = self.create_publisher(JointState, "/joint_states", 10) #punlish own joint states
+        super().__init__("pybullet_bridge")
+        self.publisher = self.create_publisher(JointState, "/joint_states", 10)
+        self.create_timer(1.0 / 60.0, self.broadcast)
 
-    ### messages are tuples of points aka. joint_names to positions, velocities, accelerations, effort
-    ### 
-    def on_trajectory(self, message):
-        if not message.points: #ends if message is empty
-            return
-
-        point = message.points[-1] #selects last point
-        positions = dict(zip(message.joint_names, point.positions)) #are we sure we can do this? dict removes duplicates    
-        self.target_positions = [
-            positions.get(name, target)
-            for name, target in zip(self.joint_names, self.target_positions)
-        ]
-
-    def apply_targets(self, pybullet):
-        for joint_index, target in zip(self.joint_indices, self.target_positions):
-            pybullet.setJointMotorControl2(
-                self.robot_id,
-                joint_index,
-                pybullet.POSITION_CONTROL,
-                targetPosition=target,
-                force=150.0,
-            )
-
-    def publish_joint_states(self, pybullet):
-        message = JointState()
-        message.header.stamp = self.get_clock().now().to_msg()
-        message.name = self.joint_names
-        message.position = [
-            pybullet.getJointState(self.robot_id, joint_index)[0]
+        self.subscriptions = self.create_subscription(
+            JointState,
+            "/follow_joint_trajectory/joint_ctrl",
+            self.callback,
+            10)
+        
+    
+    def broadcast(self):
+        joint_states = [
+            p.getJointState(self.ur10e, joint_index)
             for joint_index in self.joint_indices
         ]
-        self.joint_states.publish(message)
+        msg = JointState()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.name = self.joint_names
+        msg.position = [state[0] for state in joint_states]
+        msg.velocity = [state[1] for state in joint_states]
+        msg.effort = [state[3] for state in joint_states]
+        self.publisher.publish(msg)
+
+    def callback(self, msg):
+        for _, name in enumerate(msg.name):
+            if name in self.joint_names:
+                joint_index = self.joint_names.index(name)
+                p.setJointMotorControl2(
+                    self.ur10e,
+                    joint_index,
+                    p.POSITION_CONTROL,
+                    targetPosition=msg.position[i]
+                )
