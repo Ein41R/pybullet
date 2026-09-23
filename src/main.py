@@ -65,6 +65,7 @@ if __name__ == "__main__":
         useFixedBase=True,
     )
 
+    ###setup ros2 bridge
     joint_names = [
         "shoulder_pan_joint",
         "shoulder_lift_joint",
@@ -82,6 +83,7 @@ if __name__ == "__main__":
         for name in joint_names
     ]
 
+    #initialize ros node/DDS in publisher/subscriber mode, and create the bridge object
     rclpy.init()
     bridge = PyBulletRosBridge(ur10e, joint_indices, joint_names)
 

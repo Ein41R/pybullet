@@ -3,6 +3,10 @@ from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory
 
+# TLDR:
+# publishes joint states to /joint_states topic
+# subscribes to /joint_trajectory_controller/joint_trajectory topic --> applies in sim
+
 
 class PyBulletRosBridge(Node):
     ### initializing Ros 2 node to bridge the pybullet simulation with ros 2 topics
@@ -16,8 +20,8 @@ class PyBulletRosBridge(Node):
         self.create_subscription(#subscribe to the joint trajectory topic (created by controller)
             JointTrajectory,
             "/joint_trajectory_controller/joint_trajectory",
-            self.on_trajectory,
-            10,
+            self.on_trajectory, #publish callback function
+            10, #buffer size
         )
         self.joint_states = self.create_publisher(JointState, "/joint_states", 10) #punlish own joint states
 
