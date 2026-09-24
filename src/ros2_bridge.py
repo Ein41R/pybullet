@@ -47,9 +47,9 @@ class PyBulletRosBridge(Node):
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.name = self.joint_names
-        msg.position = [state[0] for state in joint_states]
-        msg.velocity = [state[1] for state in joint_states]
-        msg.effort = [state[3] for state in joint_states]
+        msg.position = [state[0] for state in joint_states] #position
+        msg.velocity = [state[1] for state in joint_states] #velocity
+        msg.effort = [state[3] for state in joint_states] #effort
         self.publisher.publish(msg)
 
     def subscribe_DJC(self, msg):
