@@ -74,6 +74,25 @@ def get_freqs(n, theta, dtype):
         / (2 * math.pi)
     )
 
+### simple JEPA style predictor
+# takes x of form B,1,T,D
+# per batch operation,
+# attention already merged and only single target, so DxD for each B
+class Predictor(torch.nn.Module):
+    def __init__(self, config, target_T: int):
+        super().__init__()
+        self.config = config
+        D = config.n_embd #embedding dimension
+        self.t_tgt = target_T #target sequence length
+
+        self.pos_embed = nn.Parameter(torch.zeros(1, self.t_tgt, D).normal_(std=0.02)) #(B,1,T,D)
+        self.net = nn.Sequential(nn.Linear(D, D), nn.GELU(), nn.Linear(D, D)) #Non linearity inbetween predictor
+
+    def forward(self, x):
+        h = x.squeeze(1).mean(dim=1) #apply mean pooling
+        h = h.unsqueeze(1).expand(-1, self.t_tgt, -1) 
+        out = self.net(h + self.pos_embed) #apply positional embedding
+        return out
 
 class Attention(torch.nn.Module):
     def __init__(self, config):
@@ -132,6 +151,7 @@ class JDH(nn.Module):
         self.encoder = nn.Parameter(torch.zeros((nh, D, N)).normal_(std=0.02))
 
         self.attn = Attention(config)
+        self.pred = Predictor(config)
 
         self.ln = nn.LayerNorm(D, elementwise_affine=False, bias=False)
         self.embed = nn.Embedding(config.vocab_size, D)
@@ -189,7 +209,10 @@ class JDH(nn.Module):
             )  # B, 1, T, D
             y = self.ln(yMLP)
             x = self.ln(x + y) #residual connection not in graph
-        return x,y
+        return x
+
+    def predict():
+        pass
 
     def generate():
         pass
