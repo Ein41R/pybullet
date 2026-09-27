@@ -41,11 +41,11 @@ def _resolve_path(env_name: str, default_path: Path) -> Path:
 
 
 _load_env_file()
-MODEL_PATH = _resolve_path("BDH_MODEL_PATH", Path(__file__).resolve().parent / "parameters" / "bdh_model.pt")
+MODEL_PATH = _resolve_path("JDH_MODEL_PATH", Path(__file__).resolve().parent / "parameters" / "JDH_model.pt")
 
 
 @dataclasses.dataclass
-class BDHConfig:
+class JDHConfig:
     n_layer: int = 4#6
     n_embd: int = 128#256
     dropout: float = 0.1
@@ -120,8 +120,8 @@ class Attention(torch.nn.Module):
         return scores @ V
 
 
-class BDH(nn.Module):
-    def __init__(self, config: BDHConfig):
+class JDH(nn.Module):
+    def __init__(self, config: JDHConfig):
         super().__init__()
         assert config.vocab_size is not None
         self.config = config
@@ -138,9 +138,9 @@ class BDH(nn.Module):
         self.drop = nn.Dropout(config.dropout)
         self.encoder_v = nn.Parameter(torch.zeros((nh, D, N)).normal_(std=0.02))
 
-        self.lm_head = nn.Parameter(
-            torch.zeros((D, config.vocab_size)).normal_(std=0.02)
-        )
+        # self.lm_head = nn.Parameter(
+        #     torch.zeros((D, config.vocab_size)).normal_(std=0.02)
+        # )
 
         self.apply(self._init_weights)
 
@@ -155,7 +155,7 @@ class BDH(nn.Module):
     def forward(self, idx, targets=None):
         C = self.config
 
-        B, T = idx.size()
+        B, T = idx.size() #batch size and sequence length
         D = C.n_embd
         nh = C.n_head
         N = D * C.mlp_internal_dim_multiplier // nh
@@ -183,42 +183,26 @@ class BDH(nn.Module):
 
             xy_sparse = self.drop(xy_sparse)
 
+            #merg attention heads
             yMLP = (
                 xy_sparse.transpose(1, 2).reshape(B, 1, T, N * nh) @ self.decoder
             )  # B, 1, T, D
             y = self.ln(yMLP)
-            x = self.ln(x + y)
+            x = self.ln(x + y) #residual connection not in graph
+        return x,y
 
-        logits = x.view(B, T, D) @ self.lm_head
-        loss = None
-        if targets is not None:
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+    def generate():
+        pass
 
-        return logits, loss
-
-    @torch.no_grad()
-    def generate(
-        self,
-        idx: torch.Tensor, #associative memory tensor of the model
-        max_new_tokens: int,
-        temperature: float = 1.0,
-        top_k: int | None = None,
-    ) -> torch.Tensor:
-        for _ in range(max_new_tokens):
-            idx_cond = idx
-            logits, _ = self(idx_cond)
-            logits = logits[:, -1, :] / temperature
-            if top_k is not None:
-                values, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < values[:, [-1]]] = float("-inf")
-            probs = F.softmax(logits, dim=-1)
-            idx_next = torch.multinomial(probs, num_samples=1)
-            idx = torch.cat((idx, idx_next), dim=1)
-        return idx
+        ###TODO: remove logits for jdh <done>
+    ###TODO: make encoder for the target vectors
+    ###TODO: make separate decoder for prediction
+    ###TODO: remove generate <done>
+    ###TODO: patch what doesn't work
 
 if __name__ == "__main__":
-    config = BDHConfig()
-    model = BDH(config)
+    config = JDHConfig()
+    model = JDH(config)
     print(model)
 
     MAX_TOKENS = 100
