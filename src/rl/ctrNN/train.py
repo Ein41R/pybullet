@@ -86,7 +86,7 @@ JDH_CONFIG = jdh.JDHConfig()
 BLOCK_SIZE = 512        # context chunk length
 TARGET_SIZE = 64        # target chunk length (must match Predictor.t_tgt)
 BATCH_SIZE = 32
-MAX_ITERS = 2300
+MAX_ITERS = 100#2300
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 0.1
 LOG_FREQ = 100
@@ -223,8 +223,12 @@ if __name__ == "__main__":
     print("Training done, saving model")
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # torch.save(model.state_dict(), MODEL_PATH)
+    # torch.save(decoder.state_dict(), MODEL_PATH.with_name(MODEL_PATH.stem + "_decoder.pt"))
     torch.save(model.state_dict(), MODEL_PATH)
     torch.save(decoder.state_dict(), MODEL_PATH.with_name(MODEL_PATH.stem + "_decoder.pt"))
+    print(f"Model saved to {MODEL_PATH}, decoder saved to {MODEL_PATH.with_name(MODEL_PATH.stem + '_decoder.pt')}")
+
 
     # JEPA models have no output head, so qualitative eval = compare
     # predicted vs. target embeddings for a held-out chunk.
