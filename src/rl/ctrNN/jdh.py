@@ -198,7 +198,9 @@ class JDH(nn.Module):
 
         self.attn = Attention(config)
         self.pred = Predictor(config)
-        self.EMA = EMA(self, decay=0.999)
+        # NOTE: the EMA target encoder lives in train.py (a frozen deepcopy of
+        # the model). Do NOT attach an EMA module here: registering the model
+        # as a submodule of itself creates a parameter-registration cycle.
 
         self.ln = nn.LayerNorm(D, elementwise_affine=False, bias=False)
         self.embed = nn.Embedding(config.vocab_size, D)

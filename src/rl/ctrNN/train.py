@@ -101,20 +101,23 @@ def fetch_data():
             f.write(requests.get(data_url).text)
 
 
-def get_batch(split): # x is the input sequence, y is the target sequence
-    # treat the file as bytes
+def get_batch(split):
+    # x is the context chunk, y is the DISJOINT target chunk that follows it
+    # (no overlap -> the JEPA task is not trivial)
     data = np.memmap(INPUT_FILE_PATH, dtype=np.uint8, mode="r")
     if split == "train":
         data = data[: int(0.9 * len(data))]
     else:
         data = data[int(0.9 * len(data)) :]
-    ix = torch.randint(len(data) - BLOCK_SIZE, (BATCH_SIZE,))
+    ix = torch.randint(len(data) - BLOCK_SIZE - TARGET_SIZE, (BATCH_SIZE,))
     x = torch.stack(
         [torch.from_numpy((data[i : i + BLOCK_SIZE]).astype(np.int64)) for i in ix]
     )
     y = torch.stack(
         [
-            torch.from_numpy((data[i + 1 : i + 1 + BLOCK_SIZE]).astype(np.int64))
+            torch.from_numpy(
+                (data[i + BLOCK_SIZE : i + BLOCK_SIZE + TARGET_SIZE]).astype(np.int64)
+            )
             for i in ix
         ]
     )
@@ -134,13 +137,24 @@ def eval(model):
 if __name__ == "__main__":
     fetch_data()
 
+    # target encoder: EMA copy of the online model, created BEFORE torch.compile
+    # so we deepcopy a plain JDH, not an OptimizedModule
     model = jdh.BDH(BDH_CONFIG).to(device)
+    target_encoder = copy.deepcopy(model).to(device)
+    target_encoder.eval()
+    for p in target_encoder.parameters():
+        p.requires_grad_(False)
+
     model = torch.compile(model)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
     )
-    loss = torch.nn.L1Loss()
-    encoder = copy.deepcopy(model)
+    loss_fn = torch.nn.L1Loss()
+
+    @torch.no_grad()
+    def ema_update():
+        for p_online, p_target in zip(model.parameters(), target_encoder.parameters()):
+            p_target.mul_(EMA_DECAY).add_(p_online.detach(), alpha=1 - EMA_DECAY)
 
     x, y = get_batch("train")
 
@@ -149,34 +163,41 @@ if __name__ == "__main__":
     for step in range(MAX_ITERS):
         optimizer.zero_grad(set_to_none=True)
 
+        with ctx, torch.no_grad():
+            # target embeddings: B, 1, T_tgt, D -> B, T_tgt, D (no grad!)
+            target = target_encoder(y).squeeze(1)
+
         with ctx:
-            pred = model.predict(model(x))
-            target = encoder(y)
-        x, y = get_batch("train")
-        loss = loss(pred, target)
+            pred = model.predict(model(x))  # B, T_tgt, D
+
+        loss = loss_fn(pred, target)
         loss_acc += loss
         loss_steps += 1
 
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
+        ema_update()
 
+        x, y = get_batch("train")
 
         if step % LOG_FREQ == 0:
             print(f"Step: {step}/{MAX_ITERS} loss {loss_acc.item() / loss_steps:.3}")
             loss_acc = 0
             loss_steps = 0
 
-    print("Training done, now generating a sample ")
-    model.eval() 
-    prompt = torch.tensor(
-        bytearray("To be or ", "utf-8"), dtype=torch.long, device=device 
-    ).unsqueeze(0)
-    ret = model.generate(prompt, max_new_tokens=100, top_k=3)
-    ret_decoded = bytes(ret.to(torch.uint8).to("cpu").squeeze(0)).decode(
-        errors="backslashreplace"
-    )
-    print(ret_decoded)
+    print("Training done, saving model")
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), MODEL_PATH)
+
+    # JEPA models have no output head, so qualitative eval = compare
+    # predicted vs. target embeddings for a held-out chunk.
+    model.eval()
+    x, y = get_batch("val")
+    with torch.no_grad(), ctx:
+        pred = model.predict(model(x))
+        target = target_encoder(y).squeeze(1)
+    dist = (pred - target).abs().mean()
+    cos = F.cosine_similarity(pred, target, dim=-1).mean()
+    print(f"val L1 distance: {dist.item():.4f}, cosine similarity: {cos.item():.4f}")
