@@ -16,6 +16,16 @@ import math
 
 from decoder_model import Decoder
 
+'''
+TODO: Model collapse because of mean pooling in predictor network
+
+1. use attention on predictor
+2. train on pred instead of target
+3. penalize mean-collapse
+4. use different loss function
+'''
+
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # On a Mac you can also try
 # device=torch.device('mps')

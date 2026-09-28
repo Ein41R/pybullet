@@ -90,7 +90,7 @@ class Predictor(torch.nn.Module):
         self.net = nn.Sequential(nn.Linear(D, D), nn.GELU(), nn.Linear(D, D)) #Non linearity inbetween predictor
 
     def forward(self, x):
-        h = x.squeeze(1).mean(dim=1) #apply mean pooling #dim: B,1,T,D -> B,T,D -> B,D
+        h = x.squeeze(1).mean(dim=1) #TODO: replace. this leads to mean collapse apply mean pooling #dim: B,1,T,D -> B,T,D -> B,D
         h = h.unsqueeze(1).expand(-1, self.t_tgt, -1) # B,1,D -> B, T, D
         out = self.net(h + self.pos_embed) #apply positional embedding
         return out
