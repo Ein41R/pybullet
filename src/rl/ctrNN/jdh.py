@@ -198,6 +198,7 @@ class JDH(nn.Module):
 
         self.attn = Attention(config)
         self.pred = Predictor(config)
+        self.EMA = EMA(self, decay=0.999)
 
         self.ln = nn.LayerNorm(D, elementwise_affine=False, bias=False)
         self.embed = nn.Embedding(config.vocab_size, D)
