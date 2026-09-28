@@ -10,6 +10,7 @@ import requests
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import copy
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # On a Mac you can also try
@@ -77,13 +78,15 @@ torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 print(f"Using device: {device} with dtype {dtype}")
 
-BDH_CONFIG = jdh.BDHConfig()
-BLOCK_SIZE = 512
+BDH_CONFIG = jdh.JDHConfig()
+BLOCK_SIZE = 512        # context chunk length
+TARGET_SIZE = 64        # target chunk length (must match Predictor.t_tgt)
 BATCH_SIZE = 32
 MAX_ITERS = 2300
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 0.1
 LOG_FREQ = 100
+EMA_DECAY = 0.99        # momentum of the target encoder EMA update
 
 INPUT_FILE_PATH = _resolve_path("BDH_INPUT_FILE", Path(__file__).resolve().parent / "input.txt")
 MODEL_PATH = _resolve_path("BDH_MODEL_PATH", Path(__file__).resolve().parent / "parameters" / "bdh_model.pt")
@@ -98,7 +101,7 @@ def fetch_data():
             f.write(requests.get(data_url).text)
 
 
-def get_batch(split):
+def get_batch(split): # x is the input sequence, y is the target sequence
     # treat the file as bytes
     data = np.memmap(INPUT_FILE_PATH, dtype=np.uint8, mode="r")
     if split == "train":
@@ -136,6 +139,8 @@ if __name__ == "__main__":
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
     )
+    loss = torch.nn.L1Loss()
+    encoder = copy.deepcopy(model)
 
     x, y = get_batch("train")
 
@@ -145,8 +150,10 @@ if __name__ == "__main__":
         optimizer.zero_grad(set_to_none=True)
 
         with ctx:
-            logits, loss = model(x, y)
+            pred = model.predict(model(x))
+            target = encoder(y)
         x, y = get_batch("train")
+        loss = loss(pred, target)
         loss_acc += loss
         loss_steps += 1
 

@@ -79,7 +79,7 @@ def get_freqs(n, theta, dtype):
 # per batch operation,
 # attention already merged and only single target, so DxD for each B
 class Predictor(torch.nn.Module):
-    def __init__(self, config, target_T: int):
+    def __init__(self, config, target_T: int = 64):
         super().__init__()
         self.config = config
         D = config.n_embd #embedding dimension
@@ -90,7 +90,7 @@ class Predictor(torch.nn.Module):
 
     def forward(self, x):
         h = x.squeeze(1).mean(dim=1) #apply mean pooling #dim: B,1,T,D -> B,T,D -> B,D
-        h = h.unsqueeze(1).expand(-1, self.t_tgt, -1) # B,1,D -> B, t_tgt, D
+        h = h.unsqueeze(1).expand(-1, self.t_tgt, -1) # B,1,D -> B, T, D
         out = self.net(h + self.pos_embed) #apply positional embedding
         return out
 
@@ -138,6 +138,52 @@ class Attention(torch.nn.Module):
         scores = (QR @ KR.mT).tril(diagonal=-1)
         return scores @ V
 
+#https://medium.com/@heyamit10/exponential-moving-average-ema-in-pytorch-eb8b6f1718eb
+class EMA(torch.nn.Module):
+    def __init__(self, model, decay):
+        """
+        Initialize EMA class to manage exponential moving average of model parameters.
+        
+        Args:
+            model (torch.nn.Module): The model for which EMA will track parameters.
+            decay (float): Decay rate, typically a value close to 1, e.g., 0.999.
+        """
+        super().__init__()
+        self.model = model
+        self.decay = decay
+        self.shadow = {}
+        self.backup = {}
+
+        # Store initial parameters
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                self.shadow[name] = param.data.clone()
+
+    def update(self):
+        """
+        Update shadow parameters with exponential decay.
+        """
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                new_average = (1.0 - self.decay) * param.data + self.decay * self.shadow[name]
+                self.shadow[name] = new_average.clone()
+
+    def apply_shadow(self):
+        """
+        Apply shadow (EMA) parameters to model.
+        """
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                self.backup[name] = param.data.clone()
+                param.data = self.shadow[name]
+
+    def restore(self):
+        """
+        Restore original model parameters from backup.
+        """
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                param.data = self.backup[name]
 
 class JDH(nn.Module):
     def __init__(self, config: JDHConfig):
@@ -172,7 +218,7 @@ class JDH(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx):
         C = self.config
 
         B, T = idx.size() #batch size and sequence length
@@ -211,57 +257,40 @@ class JDH(nn.Module):
             x = self.ln(x + y) #residual connection not in graph
         return x
 
-    def predict():
-        pass
+    def predict(self, x):
+        return self.pred(x)
 
-    def generate():
-        pass
-
-        ###TODO: remove logits for jdh <done>
-    ###TODO: make encoder for the target vectors
-    ###TODO: make separate decoder for prediction
+    ###TODO: remove logits for jdh <done>
+    ###TODO: make encoder for the target vectors <done: EMA copy in train.py>
+    ###TODO: make separate decoder for prediction <done: Predictor>
     ###TODO: remove generate <done>
-    ###TODO: patch what doesn't work
+    ###TODO: patch what doesn't work <done: see train.py>
 
 if __name__ == "__main__":
     config = JDHConfig()
     model = JDH(config)
     print(model)
 
-    MAX_TOKENS = 100
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model.to(device)
 
-    state_dict = torch.load(MODEL_PATH)
+    if MODEL_PATH.exists():
+        state_dict = torch.load(MODEL_PATH, map_location=device)
+        state_dict = {
+            k.replace("_orig_mod.", ""): v for k, v in state_dict.items()
+        }
+        model.load_state_dict(state_dict)
+    else:
+        print(f"No trained model found at {MODEL_PATH}; using random init.")
 
+    model.eval()
 
-    state_dict = {
-    k.replace("_orig_mod.", ""):
-    v for k, v in state_dict.items()
-    } 
-
-    model.load_state_dict(state_dict)
-    model.eval() # set model to evaluation mode, disables dropout and other training specific layers
-
-    print("Generating a sample from the model...")
+    # JEPA models have no output head, so qualitative eval = compare
+    # predicted vs. target embeddings for a held-out chunk.
     prompt = torch.tensor(
-        bytearray("To be or ", "utf-8"), dtype=torch.long, device=device # correct would be "To be or not to be,", let the model predict that
+        bytearray("To be or ", "utf-8"), dtype=torch.long, device=device
     ).unsqueeze(0)
-    ret = model.generate(prompt, max_new_tokens=100, top_k=3)
-    ret_decoded = bytes(ret.to(torch.uint8).to("cpu").squeeze(0)).decode(
-        errors="backslashreplace"
-    )
-    print(ret_decoded)
-    
-    while True:
-        user_prompt = input("\033[36mEnter a prompt (or 'exit' to quit): \033[0m")
-        if user_prompt.lower() == "exit":
-            break
-        prompt = torch.tensor(
-            bytearray(user_prompt, "utf-8"), dtype=torch.long, device=device
-        ).unsqueeze(0)
-        ret = model.generate(prompt, max_new_tokens=100, top_k=3)
-        ret_decoded = bytes(ret.to(torch.uint8).to("cpu").squeeze(0)).decode(
-            errors="backslashreplace"
-        )
-        print(ret_decoded)
+    with torch.no_grad():
+        emb = model(prompt)
+        pred = model.predict(emb)
+    print(f"context embedding: {tuple(emb.shape)}, predicted target embedding: {tuple(pred.shape)}")
