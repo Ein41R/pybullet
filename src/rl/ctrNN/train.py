@@ -86,7 +86,7 @@ JDH_CONFIG = jdh.JDHConfig()
 BLOCK_SIZE = 512        # context chunk length
 TARGET_SIZE = 64        # target chunk length (must match Predictor.t_tgt)
 BATCH_SIZE = 32
-MAX_ITERS = 100#2300
+MAX_ITERS = 2200
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 0.1
 LOG_FREQ = 100
@@ -207,7 +207,7 @@ if __name__ == "__main__":
         x, y = get_batch("train")
 
         if step % LOG_FREQ == 0:
-            dec_ce = loss_decoder.item() / loss_steps
+            dec_ce = loss_decoder.item() / loss_steps #ce stands for cross entropy
             dec_acc = dec_correct / max(dec_tokens, 1)
             print(
                 f"Step: {step}/{MAX_ITERS} "
