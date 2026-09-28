@@ -70,3 +70,5 @@ log/
 
 # misc
 tmp.md
+
+*.pt

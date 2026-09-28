@@ -78,6 +78,7 @@ def get_freqs(n, theta, dtype):
 # takes x of form B,1,T,D
 # per batch operation,
 # attention already merged and only single target, so DxD for each B
+# Returns B,T,D vector
 class Predictor(torch.nn.Module):
     def __init__(self, config, target_T: int = 64):
         super().__init__()

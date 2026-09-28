@@ -4,13 +4,16 @@ import os
 from contextlib import nullcontext
 from pathlib import Path
 
-import rl.ctrNN.jdh as jdh
+import jdh
 import numpy as np
 import requests
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import copy
+import math
+
+from decoder_model import Decoder
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # On a Mac you can also try
@@ -18,7 +21,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-# here ~/Dev/pybullet/src/rl/bdh/train.py so PROJECT_ROOT is ~/Dev/pybullet
+# here ~/Dev/pybullet/src/rl/JDH/train.py so PROJECT_ROOT is ~/Dev/pybullet
 
 ### adds environment variables from .env.development file to os.environ
 def _load_env_file() -> None:
@@ -78,7 +81,7 @@ torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 print(f"Using device: {device} with dtype {dtype}")
 
-BDH_CONFIG = jdh.JDHConfig()
+JDH_CONFIG = jdh.JDHConfig()
 BLOCK_SIZE = 512        # context chunk length
 TARGET_SIZE = 64        # target chunk length (must match Predictor.t_tgt)
 BATCH_SIZE = 32
@@ -88,8 +91,8 @@ WEIGHT_DECAY = 0.1
 LOG_FREQ = 100
 EMA_DECAY = 0.99        # momentum of the target encoder EMA update
 
-INPUT_FILE_PATH = _resolve_path("BDH_INPUT_FILE", Path(__file__).resolve().parent / "input.txt")
-MODEL_PATH = _resolve_path("BDH_MODEL_PATH", Path(__file__).resolve().parent / "parameters" / "bdh_model.pt")
+INPUT_FILE_PATH = _resolve_path("JDH_INPUT_FILE", Path(__file__).resolve().parent / "input.txt")
+MODEL_PATH = _resolve_path("JDH_MODEL_PATH", Path(__file__).resolve().parent / "parameters" / "JDH_model.pt")
 
 
 # Fetch the tiny Shakespeare dataset
@@ -137,9 +140,12 @@ def eval(model):
 if __name__ == "__main__":
     fetch_data()
 
+    #decoder for encoding
+    decoder = Decoder(JDH_CONFIG).to(device)
+
     # target encoder: EMA copy of the online model, created BEFORE torch.compile
     # so we deepcopy a plain JDH, not an OptimizedModule
-    model = jdh.BDH(BDH_CONFIG).to(device)
+    model = jdh.JDH(JDH_CONFIG).to(device)
     target_encoder = copy.deepcopy(model).to(device)
     target_encoder.eval()
     for p in target_encoder.parameters():
@@ -148,6 +154,10 @@ if __name__ == "__main__":
     model = torch.compile(model)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
+    )
+    # separate optimizer for the decoder (probing head trained in tangent)
+    decoder_optimizer = torch.optim.AdamW(
+        decoder.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
     )
     loss_fn = torch.nn.L1Loss()
 
@@ -158,17 +168,28 @@ if __name__ == "__main__":
 
     x, y = get_batch("train")
 
+    loss_decoder = 0
     loss_acc = 0
     loss_steps = 0
+    dec_correct = 0 # number of correct predictions by the decoder
+    dec_tokens = 0
     for step in range(MAX_ITERS):
         optimizer.zero_grad(set_to_none=True)
+        decoder_optimizer.zero_grad(set_to_none=True)
 
-        with ctx, torch.no_grad():
+        with ctx, torch.no_grad(): #freeze encoder
             # target embeddings: B, 1, T_tgt, D -> B, T_tgt, D (no grad!)
             target = target_encoder(y).squeeze(1)
 
         with ctx:
             pred = model.predict(model(x))  # B, T_tgt, D
+
+        #TODO: maybe the pred as target is better? 
+        logits, dec_loss = decoder(target, y) #training decoder in tangent
+        loss_decoder += dec_loss.detach()
+        # decoder telemetry: token accuracy over the target chunk
+        dec_correct += (logits.detach().argmax(dim=-1) == y).sum().item()
+        dec_tokens += y.numel()
 
         loss = loss_fn(pred, target)
         loss_acc += loss
@@ -177,27 +198,57 @@ if __name__ == "__main__":
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
+        # decoder trains on its own loss (tangent to the JEPA objective)
+        scaler.scale(dec_loss).backward()
+        scaler.step(decoder_optimizer)
         ema_update()
 
         x, y = get_batch("train")
 
         if step % LOG_FREQ == 0:
-            print(f"Step: {step}/{MAX_ITERS} loss {loss_acc.item() / loss_steps:.3}")
+            dec_ce = loss_decoder.item() / loss_steps
+            dec_acc = dec_correct / max(dec_tokens, 1)
+            print(
+                f"Step: {step}/{MAX_ITERS} "
+                f"jepa {loss_acc.item() / loss_steps:.3} | "
+                f"decoder ce {dec_ce:.3} acc {dec_acc:.3} ppl {math.exp(min(dec_ce, 20)):.1}"
+            )
             loss_acc = 0
             loss_steps = 0
+            loss_decoder = 0
+            dec_correct = 0
+            dec_tokens = 0
 
     print("Training done, saving model")
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), MODEL_PATH)
+    torch.save(decoder.state_dict(), MODEL_PATH.with_name(MODEL_PATH.stem + "_decoder.pt"))
 
     # JEPA models have no output head, so qualitative eval = compare
     # predicted vs. target embeddings for a held-out chunk.
     model.eval()
+    decoder.eval()
     x, y = get_batch("val")
     with torch.no_grad(), ctx:
         pred = model.predict(model(x))
         target = target_encoder(y).squeeze(1)
+        # decoder telemetry on held-out data: can the probing head read the
+        # target embeddings, and can it read the *predicted* embeddings?
+        tgt_logits, _ = decoder(target, y)
+        pred_logits, _ = decoder(pred, y)
     dist = (pred - target).abs().mean()
     cos = F.cosine_similarity(pred, target, dim=-1).mean()
+    tgt_ce = F.cross_entropy(tgt_logits.view(-1, tgt_logits.size(-1)), y.view(-1))
+    pred_ce = F.cross_entropy(pred_logits.view(-1, pred_logits.size(-1)), y.view(-1))
+    tgt_acc = (tgt_logits.argmax(dim=-1) == y).float().mean()
+    pred_acc = (pred_logits.argmax(dim=-1) == y).float().mean()
     print(f"val L1 distance: {dist.item():.4f}, cosine similarity: {cos.item():.4f}")
+    print(
+        f"decoder on target emb:  ce {tgt_ce.item():.3} acc {tgt_acc.item():.3} "
+        f"ppl {math.exp(min(tgt_ce.item(), 20)):.1}"
+    )
+    print(
+        f"decoder on predicted emb: ce {pred_ce.item():.3} acc {pred_acc.item():.3} "
+        f"ppl {math.exp(min(pred_ce.item(), 20)):.1}"
+    )
