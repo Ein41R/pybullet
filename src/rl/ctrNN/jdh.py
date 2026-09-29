@@ -89,10 +89,10 @@ class Predictor(torch.nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, self.t_tgt, D).normal_(std=0.02)) #(B,1,T,D)
         self.net = nn.Sequential(nn.Linear(D, D), nn.GELU(), nn.Linear(D, D)) #Non linearity inbetween predictor
 
-        #se
-        self.Wk = nn.linear(D, D, bias=False)
-        self.Wv = nn.linear(D, D, bias=False)
-        self.Wq = nn.linear(D, D, bias=False)
+        #self attention
+        self.Wq = nn.Linear(D, D, bias=False)
+        self.Wk = nn.Linear(D, D, bias=False)
+        self.Wv = nn.Linear(D, D, bias=False)
 
     #takes B,T,D
     def attend(self, x):
@@ -112,6 +112,7 @@ class Predictor(torch.nn.Module):
     def forward(self, x): #B,1,T,D
         x = x.squeeze(1) #B,T,D
         h = self.attend(x) #B,T,D
+        h = h[:, -self.t_tgt:] #match expected shape
         out = self.net(h + self.pos_embed) #B,T,D
         return out
 
