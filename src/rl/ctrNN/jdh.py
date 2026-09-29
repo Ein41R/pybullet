@@ -89,13 +89,33 @@ class Predictor(torch.nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, self.t_tgt, D).normal_(std=0.02)) #(B,1,T,D)
         self.net = nn.Sequential(nn.Linear(D, D), nn.GELU(), nn.Linear(D, D)) #Non linearity inbetween predictor
 
-    def forward(self, x):
-        h = x.squeeze(1).mean(dim=1) #TODO: replace. this leads to mean collapse apply mean pooling #dim: B,1,T,D -> B,T,D -> B,D
-        h = h.unsqueeze(1).expand(-1, self.t_tgt, -1) # B,1,D -> B, T, D
-        out = self.net(h + self.pos_embed) #apply positional embedding
+        #se
+        self.Wk = nn.linear(D, D, bias=False)
+        self.Wv = nn.linear(D, D, bias=False)
+        self.Wq = nn.linear(D, D, bias=False)
+
+    #takes B,T,D
+    def attend(self, x):
+        k = self.Wk(x)
+        v = self.Wv(x)
+        q = self.Wq(x)
+
+        attn_scores = q @ torch.transpose(k, -2, -1) / math.sqrt(k.size(-1))
+        #attending to only previous tokens since this is autoregressive
+        upper_triangular  = torch.triu(attn_scores, diagonal=1).bool()
+        attn_scores[upper_triangular] = float("-inf")
+        # Apply softmax to get attention weights
+        att_score_softmax = F.softmax(attn_scores, dim=-1)
+        weighted_v = att_score_softmax @ v
+        return weighted_v
+
+    def forward(self, x): #B,1,T,D
+        x = x.squeeze(1) #B,T,D
+        h = self.attend(x) #B,T,D
+        out = self.net(h + self.pos_embed) #B,T,D
         return out
 
-class Attention(torch.nn.Module):
+class Attention(torch.nn.Module): #Attention takes
     def __init__(self, config):
         super().__init__()
         self.config = config
