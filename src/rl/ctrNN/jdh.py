@@ -86,7 +86,7 @@ class Predictor(torch.nn.Module):
         D = config.n_embd #embedding dimension
         self.t_tgt = target_T #target sequence length
 
-        self.pos_embed = nn.Parameter(torch.zeros(1, self.t_tgt, D).normal_(std=0.02)) #(B,1,T,D)
+        # self.pos_embed = nn.Parameter(torch.zeros(1, self.t_tgt, D).normal_(std=0.02)) #(B,1,T,D)
         self.net = nn.Sequential(nn.Linear(D, D), nn.GELU(), nn.Linear(D, D)) #Non linearity inbetween predictor
 
         #self attention
@@ -113,7 +113,7 @@ class Predictor(torch.nn.Module):
         x = x.squeeze(1) #B,T,D
         h = self.attend(x) #B,T,D
         h = h[:, -self.t_tgt:] #match expected shape
-        out = self.net(h + self.pos_embed) #B,T,D
+        out = self.net(h) #B,T,D
         return out
 
 class Attention(torch.nn.Module): #Attention takes

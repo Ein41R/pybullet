@@ -48,7 +48,8 @@ if __name__ == "__main__":
                 x = model.forward(prompt)
                 y = model.predict(x)
                 idx_next = decoder.generate(y, top_k=3)
-                token = bytes(idx_next.item()).decode("utf-8", errors="ignore")
+                token = bytes(idx_next.item())
+                # token = bytes(idx_next.item()).decode("utf-8", errors="ignore")
                 # stream each token so output is visible immediately
                 print(token, end="", flush=True)
                 prompt = torch.cat((prompt, idx_next), dim=1)
