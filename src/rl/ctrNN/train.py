@@ -96,7 +96,7 @@ JDH_CONFIG = jdh.JDHConfig()
 BLOCK_SIZE = 512        # context chunk length
 TARGET_SIZE = 64        # target chunk length (must match Predictor.t_tgt)
 BATCH_SIZE = 32
-MAX_ITERS = 2200
+MAX_ITERS = 1500
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 0.1
 LOG_FREQ = 100
@@ -195,11 +195,13 @@ if __name__ == "__main__":
         with ctx:
             pred = model.predict(model(x))  # B, T_tgt, D
 
-        #TODO: maybe the pred as target is better? 
-        logits, dec_loss = decoder(target, y) #training decoder in tangent
+        # Training on both predicted and target. 
+        tgt_logits, tgt_dec_loss = decoder(target, y)
+        pred_logits, pred_dec_loss = decoder(pred, y)
+        dec_loss = 0.5 * (tgt_dec_loss + pred_dec_loss)
         loss_decoder += dec_loss.detach()
         # decoder telemetry: token accuracy over the target chunk
-        dec_correct += (logits.detach().argmax(dim=-1) == y).sum().item()
+        dec_correct += (pred_logits.detach().argmax(dim=-1) == y).sum().item()
         dec_tokens += y.numel()
 
         loss = loss_fn(pred, target)
