@@ -6,6 +6,8 @@ from jdh import JDHConfig
 from jdh import JDH
 from decoder_model import Decoder
 
+max_new_tokens = 10
+
 env = LoadEnv()
 if __name__ == "__main__":
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -33,8 +35,21 @@ if __name__ == "__main__":
         prompt = torch.tensor(
             bytearray(user_prompt, "utf-8"), dtype=torch.long, device=device
         ).unsqueeze(0)
-        x = model.forward(prompt)
-        y = model.predict(x)
-        out = decoder.generate(y, prompt, max_new_tokens=100, top_k=3)
-        out_str = bytes(out.to(torch.uint8).to("cpu").squeeze(0)).decode(errors="backslashreplace")
-        print(out_str)
+        # if prompt.size(1) < 64:
+        #     prompt = torch.cat(
+        #         (torch.zeros(1, 64 - prompt.size(1), dtype=torch.long, device=device), prompt), dim=1
+        #     )
+        prompt = prompt[:, -64:]  # keep the LAST 64 tokens (real text at the end)
+        print("\033[32mGenerating text...\033[0m")
+        with torch.no_grad():
+            for _ in range(max_new_tokens):
+                # re-encode the full (growing) context, predict the next chunk,
+                # then decode only the last predicted embedding -> one token
+                x = model.forward(prompt)
+                y = model.predict(x)
+                idx_next = decoder.generate(y, top_k=3)
+                token = bytes(idx_next.item()).decode("utf-8", errors="ignore")
+                # stream each token so output is visible immediately
+                print(token, end="", flush=True)
+                prompt = torch.cat((prompt, idx_next), dim=1)
+        print()

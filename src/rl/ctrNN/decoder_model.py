@@ -13,6 +13,7 @@ from jdh import JDHConfig
 Decoder do create tokens from JEPA embedding prediction
 --> B,T,D
 """
+TARGET_SIZE = 64
 
 
 class Decoder(nn.Module) :
@@ -37,25 +38,22 @@ class Decoder(nn.Module) :
     def generate(
         self,
         x,
-        idx: torch.Tensor,
-        max_new_tokens: int,
         temperature: float = 1.0,
         top_k: int | None = None,
     ) -> torch.Tensor:
-        for _ in range(max_new_tokens):
-            x = self.net(x)
-            logits = x @ self.lm_head
-            if top_k is not None:
-                v, _ = torch.topk(logits, top_k, dim=-1)
-                # v: B, T, k -> k-th largest per position, keep dims for broadcast
-                logits = logits.masked_fill(logits < v[:, :, -1:], -float("Inf"))
-            logits = logits[:, -1, :] / temperature # scale by temperature
-            probs = F.softmax(logits, dim=-1)
-            idx_next = torch.multinomial(probs, num_samples=1)
-            idx = torch.cat((idx, idx_next), dim=1)
-            # NOTE: this decoder maps embeddings -> tokens, not tokens ->
-            # embeddings, so we cannot feed idx_next back in. Each step re-reads
-            # the same embedding sequence; for true autoregression you would
-            # need a token embedding here or re-encode the grown idx with the
-            # JDH encoder + predictor.
-        return idx
+        """Decode a single next token from a predicted embedding.
+
+        x: B, T, D predicted embedding (only the last position is used).
+        Returns: B, 1 token indices.
+        """
+
+        x = self.net(x)
+        logits = x @ self.lm_head  # B, T, vocab
+        if top_k is not None:
+            v, _ = torch.topk(logits, top_k, dim=-1)
+            # v: B, T, k -> k-th largest per position, keep dims for broadcast
+            logits = logits.masked_fill(logits < v[:, :, -1:], -float("Inf"))
+        logits = logits[:, -1, :] / temperature  # B, vocab
+        probs = F.softmax(logits, dim=-1)
+        idx_next = torch.multinomial(probs, num_samples=1)
+        return idx_next
