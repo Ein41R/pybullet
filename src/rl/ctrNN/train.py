@@ -17,12 +17,10 @@ import math
 from decoder_model import Decoder
 
 '''
-TODO: Model collapse because of mean pooling in predictor network
+TODO: still model collapse
 
-1. use attention on predictor
-2. train on pred instead of target
-3. penalize mean-collapse
-4. use different loss function
+1. ?opt? use different loss?
+2. 
 '''
 
 
@@ -195,9 +193,11 @@ if __name__ == "__main__":
         with ctx:
             pred = model.predict(model(x))  # B, T_tgt, D
 
+        pred = pred.float()
+
         # Training on both predicted and target. 
         tgt_logits, tgt_dec_loss = decoder(target, y)
-        pred_logits, pred_dec_loss = decoder(pred, y)
+        pred_logits, pred_dec_loss = decoder(pred.detach(), y)
         dec_loss = 0.5 * (tgt_dec_loss + pred_dec_loss)
         loss_decoder += dec_loss.detach()
         # decoder telemetry: token accuracy over the target chunk
