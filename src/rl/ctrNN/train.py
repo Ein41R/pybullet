@@ -188,7 +188,7 @@ if __name__ == "__main__":
 
         with ctx, torch.no_grad(): #freeze encoder
             # target embeddings: B, 1, T_tgt, D -> B, T_tgt, D (no grad!)
-            target = target_encoder(x+y).squeeze(1) #used to be y
+            target = target_encoder(y).squeeze(1) #used to be y
 
         with ctx:
             pred = model.predict(model(x))  # B, T_tgt, D
@@ -212,11 +212,11 @@ if __name__ == "__main__":
         #dot product for each pair for similarity matrix. Lmao. crazy how this works.
         #Basically all accross the diagonal should be high and rest low.
         # I think ive heard of this concept before.... cant remember where
-        similarity = similarity.mean(dim=-1) / 0.1
+        similarity = similarity / 0.1
         #dude there is no way. This makes a classification problem out of the predicted embeddings.
         #I could never. im beeing mogged by a AI proposing fixes for my code.
         # let me push the code before the AI makes these changes so I can see how it changes shit
-        labels = torch.arange(similarity.size(0), device=similarity.device)
+        labels = torch.arange(similarity.size(0), device=similarity.device)# gives tensor (0,1,2...,B-1) for each batch index. This is the correct label for each prediction
         loss = F.cross_entropy(similarity, labels)
 
 
