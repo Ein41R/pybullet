@@ -188,7 +188,7 @@ if __name__ == "__main__":
 
         with ctx, torch.no_grad(): #freeze encoder
             # target embeddings: B, 1, T_tgt, D -> B, T_tgt, D (no grad!)
-            target = target_encoder(y).squeeze(1)
+            target = target_encoder(x+y).squeeze(1) #used to be y
 
         with ctx:
             pred = model.predict(model(x))  # B, T_tgt, D
@@ -204,6 +204,7 @@ if __name__ == "__main__":
         dec_correct += (pred_logits.detach().argmax(dim=-1) == y).sum().item()
         dec_tokens += y.numel()
 
+        #TODO: do a per batch operation, and mix some up to negative pairs to prevent representation collapse
         loss = loss_fn(pred, target)
         loss_acc += loss
         loss_steps += 1
