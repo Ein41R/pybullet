@@ -204,8 +204,23 @@ if __name__ == "__main__":
         dec_correct += (pred_logits.detach().argmax(dim=-1) == y).sum().item()
         dec_tokens += y.numel()
 
-        #TODO: do a per batch operation, and mix some up to negative pairs to prevent representation collapse
-        loss = loss_fn(pred, target)
+        # Each prediction matches the target at the same batch index. The
+        # other targets in the batch provide negative examples.
+        pred_norm = F.normalize(pred, dim=-1)
+        target_norm = F.normalize(target.float(), dim=-1)
+        similarity = torch.einsum("btd,ctd->bc", pred_norm, target_norm) 
+        #dot product for each pair for similarity matrix. Lmao. crazy how this works.
+        #Basically all accross the diagonal should be high and rest low.
+        # I think ive heard of this concept before.... cant remember where
+        similarity = similarity.mean(dim=-1) / 0.1
+        #dude there is no way. This makes a classification problem out of the predicted embeddings.
+        #I could never. im beeing mogged by a AI proposing fixes for my code.
+        # let me push the code before the AI makes these changes so I can see how it changes shit
+        labels = torch.arange(similarity.size(0), device=similarity.device)
+        loss = F.cross_entropy(similarity, labels)
+
+
+
         loss_acc += loss
         loss_steps += 1
 
