@@ -214,11 +214,10 @@ if __name__ == "__main__":
         # Contrastive over ALL target tokens (not just the last one), so every
         # predicted embedding is pulled toward its matching target and pushed
         # away from the other batch items' targets.
-        pred_norm = F.normalize(pred, dim=-1)              # B, T, D
-        target_norm = F.normalize(target.float(), dim=-1)  # B, T, D
+        pred_norm = pred#F.normalize(pred, dim=-1)              # B, T, D
+        target_norm = target.float() #F.normalize(target.float(), dim=-1)  # B, T, D
         similarity = torch.einsum("btd,ctd->btc", pred_norm, target_norm)  # B, T, B
         #we want similarity to be truly discrimative.
-        similarity = similarity
         labels = torch.arange(similarity.size(0), device=similarity.device)# gives tensor (0,1,2...,B-1) for each batch index. This is the correct label for each prediction
         loss = F.cross_entropy(
             similarity.reshape(-1, similarity.size(-1)),      # (B*T, B)
