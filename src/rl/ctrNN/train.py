@@ -224,10 +224,6 @@ if __name__ == "__main__":
             labels.repeat_interleave(similarity.size(1)),  # (B*T,)
         )
 
-        # --- anti-collapse: variance regularization (VICReg-style) ---
-        # The contrastive loss alone can be trivially minimized by collapsing
-        # all predicted embeddings to a single point. Penalize low variance
-        # across the batch so the embeddings stay spread out.
         std = pred.std(dim=0)                            # (T, D) std across batch
         variance_loss = F.relu(1.0 - std).mean()         # anti-collapse
         loss = loss + 0.1 * variance_loss
