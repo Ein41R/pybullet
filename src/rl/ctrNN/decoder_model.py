@@ -13,7 +13,7 @@ from config import TARGET_SIZE
 """
 Decoder do create tokens from JEPA embedding prediction
 --> B,T,D
-"""
+"""     
 
 
 class Decoder(nn.Module) :

@@ -209,25 +209,10 @@ if __name__ == "__main__":
         dec_correct += (pred_logits.detach().argmax(dim=-1) == y).sum().item()
         dec_tokens += y.numel()
 
-        # Each prediction matches the target at the same batch index. The
-        # other targets in the batch provide negative examples.
-        # Contrastive over ALL target tokens (not just the last one), so every
-        # predicted embedding is pulled toward its matching target and pushed
-        # away from the other batch items' targets.
-        pred_norm = pred#F.normalize(pred, dim=-1)              # B, T, D
-        target_norm = target.float() #F.normalize(target.float(), dim=-1)  # B, T, D
-        similarity = torch.einsum("btd,ctd->btc", pred_norm, target_norm)  # B, T, B
-        #we want similarity to be truly discrimative.
-        labels = torch.arange(similarity.size(0), device=similarity.device)# gives tensor (0,1,2...,B-1) for each batch index. This is the correct label for each prediction
-        loss = F.cross_entropy(
-            similarity.reshape(-1, similarity.size(-1)),      # (B*T, B)
-            labels.repeat_interleave(similarity.size(1)),  # (B*T,)
-        )
+        #pred = pred
+        target = target.float()
 
-        std = pred.std(dim=0)                            # (T, D) std across batch
-        variance_loss = F.relu(1.0 - std).mean()         # anti-collapse
-        loss = loss + 0.1 * variance_loss
-
+        loss = vLoss + cLoss
 
 
         loss_acc += loss
