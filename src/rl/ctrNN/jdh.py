@@ -9,6 +9,8 @@ import torch
 import torch.nn.functional as F
 from torch import mode, nn
 
+from config import TARGET_SIZE
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -80,7 +82,7 @@ def get_freqs(n, theta, dtype):
 # attention already merged and only single target, so DxD for each B
 # Returns B,T,D vector
 class Predictor(torch.nn.Module):
-    def __init__(self, config, target_T: int = 64):
+    def __init__(self, config, target_T: int = TARGET_SIZE):
         super().__init__()
         self.config = config
         D = config.n_embd #embedding dimension

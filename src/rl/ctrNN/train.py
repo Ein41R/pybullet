@@ -14,6 +14,16 @@ import copy
 import math
 import math
 
+from config import (
+    BLOCK_SIZE,
+    TARGET_SIZE,
+    BATCH_SIZE,
+    MAX_ITERS,
+    LEARNING_RATE,
+    WEIGHT_DECAY,
+    LOG_FREQ,
+    EMA_DECAY,
+)
 from decoder_model import Decoder
 
 '''
@@ -91,14 +101,9 @@ torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 print(f"Using device: {device} with dtype {dtype}")
 
 JDH_CONFIG = jdh.JDHConfig()
-BLOCK_SIZE = 512        # context chunk length
-TARGET_SIZE = 64        # target chunk length (must match Predictor.t_tgt)
-BATCH_SIZE = 32
-MAX_ITERS = 1500
-LEARNING_RATE = 1e-3
-WEIGHT_DECAY = 0.1
-LOG_FREQ = 100
-EMA_DECAY = 0.9995      # momentum of the target encoder EMA update
+# Training/model constants live in config.py (single source of truth).
+# Imported above: BLOCK_SIZE, TARGET_SIZE, BATCH_SIZE, MAX_ITERS,
+# LEARNING_RATE, WEIGHT_DECAY, LOG_FREQ, EMA_DECAY.
 
 INPUT_FILE_PATH = _resolve_path("JDH_INPUT_FILE", Path(__file__).resolve().parent / "input.txt")
 MODEL_PATH = _resolve_path("JDH_MODEL_PATH", Path(__file__).resolve().parent / "parameters" / "JDH_model.pt")
@@ -170,19 +175,6 @@ if __name__ == "__main__":
     )
     loss_fn = torch.nn.L1Loss()
 
-    # --- anti-collapse regularizers (VICReg-style) ---
-    def variance_loss(z, eps=1e-4):
-        # z: B, T, D -> push per-dim std over the batch toward 1
-        std = torch.sqrt(z.var(dim=0) + eps)
-        return F.relu(1.0 - std).mean()
-
-    def covariance_loss(z):
-        B, T, D = z.shape
-        zc = z - z.mean(dim=0, keepdim=True)
-        cov = (zc.transpose(0, 1) @ zc) / B  # T, D, D
-        off_diag = cov - torch.diag(cov.diag())
-        return (off_diag ** 2).sum() / (T * D)
-
     @torch.no_grad()
     def ema_update():
         for p_online, p_target in zip(model.parameters(), target_encoder.parameters()):
@@ -221,19 +213,11 @@ if __name__ == "__main__":
         # other targets in the batch provide negative examples.
         pred_norm = F.normalize(pred, dim=-1)
         target_norm = F.normalize(target.float(), dim=-1)
-        similarity = torch.einsum("btd,ctd->bc", pred_norm, target_norm) 
-        #dot product for each pair for similarity matrix. Lmao. crazy how this works.
-        #Basically all accross the diagonal should be high and rest low.
-        # I think ive heard of this concept before.... cant remember where
+        similarity = torch.einsum("btd,ctd->btc", pred_norm, target_norm)#B,T,B
+        #we want similarity to be truly discrimative.
         similarity = similarity / 0.1
-        #dude there is no way. This makes a classification problem out of the predicted embeddings.
-        #I could never. im beeing mogged by a AI proposing fixes for my code.
-        # let me push the code before the AI makes these changes so I can see how it changes shit
         labels = torch.arange(similarity.size(0), device=similarity.device)# gives tensor (0,1,2...,B-1) for each batch index. This is the correct label for each prediction
-        loss = F.cross_entropy(similarity, labels)
-        # anti-collapse: keep the predicted embedding batch spread out and
-        # decorrelated, so the encoder cannot collapse to a constant vector.
-        loss = loss + 0.1 * variance_loss(pred) + 0.1 * covariance_loss(pred)
+        loss = F.cross_entropy(similarity, labels.repeat_interleave(TARGET_SIZE)) #repeat each label TARGET_SIZE times to match the number of predictions
 
 
 

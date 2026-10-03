@@ -8,12 +8,12 @@ import torch.nn.functional as F
 from torch import mode, nn
 
 from jdh import JDHConfig
+from config import TARGET_SIZE
 
 """
 Decoder do create tokens from JEPA embedding prediction
 --> B,T,D
 """
-TARGET_SIZE = 64
 
 
 class Decoder(nn.Module) :
