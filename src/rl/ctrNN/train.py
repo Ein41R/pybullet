@@ -212,12 +212,14 @@ if __name__ == "__main__":
         # Each prediction matches the target at the same batch index. The
         # other targets in the batch provide negative examples.
         pred_norm = F.normalize(pred, dim=-1)
-        target_norm = F.normalize(target.float(), dim=-1)
-        similarity = torch.einsum("btd,ctd->btc", pred_norm, target_norm)#B,T,B
+        pred_cat = pred_norm[:, -1, :] #B,D
+        target_norm = F.normalize(target.float(), dim=-1) #B,T,D or considering that t target is 1: B,1,D
+        target_cat = target_norm[:, -1, :] #B,D
+        similarity = torch.einsum("bd,cd->bc", pred_cat, target_cat)#B,B
         #we want similarity to be truly discrimative.
         similarity = similarity / 0.1
         labels = torch.arange(similarity.size(0), device=similarity.device)# gives tensor (0,1,2...,B-1) for each batch index. This is the correct label for each prediction
-        loss = F.cross_entropy(similarity, labels.repeat_interleave(TARGET_SIZE)) #repeat each label TARGET_SIZE times to match the number of predictions
+        loss = F.cross_entropy(similarity, labels) #repeat each label TARGET_SIZE times to match the number of predictions
 
 
 
