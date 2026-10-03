@@ -211,15 +211,27 @@ if __name__ == "__main__":
 
         # Each prediction matches the target at the same batch index. The
         # other targets in the batch provide negative examples.
-        pred_norm = F.normalize(pred, dim=-1)
-        pred_cat = pred_norm[:, -1, :] #B,D
-        target_norm = F.normalize(target.float(), dim=-1) #B,T,D or considering that t target is 1: B,1,D
-        target_cat = target_norm[:, -1, :] #B,D
-        similarity = torch.einsum("bd,cd->bc", pred_cat, target_cat)#B,B
+        # Contrastive over ALL target tokens (not just the last one), so every
+        # predicted embedding is pulled toward its matching target and pushed
+        # away from the other batch items' targets.
+        pred_norm = F.normalize(pred, dim=-1)              # B, T, D
+        target_norm = F.normalize(target.float(), dim=-1)  # B, T, D
+        similarity = torch.einsum("btd,ctd->btc", pred_norm, target_norm)  # B, T, B
         #we want similarity to be truly discrimative.
-        similarity = similarity / 0.1
+        similarity = similarity
         labels = torch.arange(similarity.size(0), device=similarity.device)# gives tensor (0,1,2...,B-1) for each batch index. This is the correct label for each prediction
-        loss = F.cross_entropy(similarity, labels) #repeat each label TARGET_SIZE times to match the number of predictions
+        loss = F.cross_entropy(
+            similarity.reshape(-1, similarity.size(-1)),      # (B*T, B)
+            labels.repeat_interleave(similarity.size(1)),  # (B*T,)
+        )
+
+        # --- anti-collapse: variance regularization (VICReg-style) ---
+        # The contrastive loss alone can be trivially minimized by collapsing
+        # all predicted embeddings to a single point. Penalize low variance
+        # across the batch so the embeddings stay spread out.
+        std = pred.std(dim=0)                            # (T, D) std across batch
+        variance_loss = F.relu(1.0 - std).mean()         # anti-collapse
+        loss = loss + 0.1 * variance_loss
 
 
 

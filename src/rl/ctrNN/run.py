@@ -27,6 +27,7 @@ if __name__ == "__main__":
     decoder.load_state_dict(decoder_state_dict)
     decoder.to(device)
     decoder.eval()
+    collapse_count = 0
     while True:
         user_prompt = input("\033[36mEnter a prompt (or 'exit' to quit): \033[0m")
         tmp = user_prompt
@@ -48,7 +49,15 @@ if __name__ == "__main__":
                 x = model.forward(prompt)
                 y = model.predict(x)
                 idx_next = decoder.generate(y, top_k=3)
-                token = bytes(idx_next.item()).decode("utf-8", errors="ignore")
+                token = bytes(idx_next.item())
+                if  bytes("\x00", "utf-8") in token:
+                    collapse_count += 1
+                    if collapse_count > 5:
+                        print("\033[31mGeneration collapsed. Stopping.\033[0m")
+                        break
+                else:
+                    collapse_count = 0
+                token = token.decode("utf-8", errors="ignore")
                 # stream each token so output is visible immediately
                 print(token, end="", flush=True)
                 prompt = torch.cat((prompt, idx_next), dim=1)
