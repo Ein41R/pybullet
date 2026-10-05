@@ -165,15 +165,16 @@ def iLoss(pred, target):
 
 def vLoss(pred, target_var=0.7): #VicReg style by deepseek
     pred = pred.reshape(-1, pred.shape[-1]) #D
-    std = torch.sqrt(torch.var(pred, dim=0, unbiased=True) + 1e-06) #+1e-04 to avoid div by 0 at sqrt
+    # std = torch.sqrt(torch.var(pred, dim=0, unbiased=True) + 1e-06) #+1e-04 to avoid div by 0 at sqrt
+    std = torch.std(pred, dim=0, unbiased=True).mean()
     return F.relu(target_var - std).pow(2).mean()
 
-def cLoss(pred, target):
-    return 0
-#     std_pred = torch.std(pred, dim=(-1), unbiased=True)
-#     std_target = torch.std(target, dim=(-1), unbiased=True)
-#     loss = (std_pred*std_target).mean()
-#     return loss**2
+def cLoss(pred): #idk what is going on here, but this is the covariance loss from VICReg
+    pred = pred.reshape(-1, pred.shape[-1]) #D
+    pred = pred - pred.mean(dim=0) #center the embeddings
+    cov = (pred.T @ pred) / (pred.shape[0] - 1) #covariance matrix
+    off_diag = cov - torch.diag(torch.diagonal(cov)) #off-diagonal
+    return off_diag.pow(2).sum() / pred.shape[-1] #mean of
 
 if __name__ == "__main__":
     fetch_data()
@@ -241,7 +242,8 @@ if __name__ == "__main__":
         """
         loss = (
             L_RELEVANCE[0] * iLoss(pred, target)
-            + L_RELEVANCE[1] * vLoss(pred)
+            + L_RELEVANCE[1] * vLoss(pred) + L_RELEVANCE[1] * vLoss(target) 
+            + L_RELEVANCE[2] * cLoss(pred) + L_RELEVANCE[2] * cLoss(target)
         )
 
 
@@ -314,4 +316,10 @@ if __name__ == "__main__":
         f"vLoss: {vLoss(pred):.3f}, "
         f"pred.std: {pred.std(dim=(0, 1)).mean().item():.3f}, "
         f"target.std: {target.std(dim=(0, 1)).mean().item():.3f}"
+    )
+    print(
+        f"iLoss: {iLoss(pred, target).item():.3f}, "
+        f"vLoss: {vLoss(pred):.3f}, "
+        f"pred.std: {pred.std().item():.3f}, "
+        f"target.std: {target.std().item():.3f}"
     )

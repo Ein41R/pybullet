@@ -9,8 +9,8 @@ redefining them locally.
 BLOCK_SIZE = 512        # context chunk length
 TARGET_SIZE = 8         # target chunk length (must match Predictor.t_tgt)
 BATCH_SIZE = 32
-MAX_ITERS = 400
-LEARNING_RATE = 1e-3
+MAX_ITERS = 500
+LEARNING_RATE = 5e-3
 WEIGHT_DECAY = 0.1
 LOG_FREQ = 100
 EMA_DECAY = 0.99        # momentum of the target encoder EMA update
