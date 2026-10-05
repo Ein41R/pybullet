@@ -316,10 +316,6 @@ if __name__ == "__main__":
         f"vLoss: {vLoss(pred):.3f}, "
         f"pred.std: {pred.std(dim=(0, 1)).mean().item():.3f}, "
         f"target.std: {target.std(dim=(0, 1)).mean().item():.3f}"
-    )
-    print(
-        f"iLoss: {iLoss(pred, target).item():.3f}, "
-        f"vLoss: {vLoss(pred):.3f}, "
         f"pred.std: {pred.std().item():.3f}, "
         f"target.std: {target.std().item():.3f}"
     )
