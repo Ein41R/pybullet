@@ -36,11 +36,14 @@ if __name__ == "__main__":
         prompt = torch.tensor(
             bytearray(user_prompt, "utf-8"), dtype=torch.long, device=device
         ).unsqueeze(0)
-        # if prompt.size(1) < 64:
-        #     prompt = torch.cat(
-        #         (torch.zeros(1, 64 - prompt.size(1), dtype=torch.long, device=device), prompt), dim=1
-        #     )
-        prompt = prompt[:, -64:]  # keep the LAST 64 tokens (real text at the end)
+
+        if prompt.size(1) > 512:
+            print("\033[31mPrompt is too long. Please enter a shorter prompt (max 512 characters).\033[0m")
+            continue
+        elif prompt.size(1) < 1:
+            print("\033[31mPrompt is too short. Please enter a longer prompt (min 8 characters).\033[0m")
+            continue
+
         print("\033[32mGenerating text...\033[0m")
         with torch.no_grad():
             for _ in range(max_new_tokens):
