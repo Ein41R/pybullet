@@ -154,15 +154,24 @@ def iLoss(pred, target):
     # L1 loss between predicted and target embeddings
     return F.l1_loss(pred, target)
 
-def vLoss(pred, target): #B,T,D
+""" EXPLANATION
+Keeps standard deviation over certain minimum.
+Ignores variance completely once std is above minimum.
+"""
+def vLoss(pred, target):  
     minimum_std = 1e-6
-    std = torch.std(pred, target, dim=-1)
-    loss = (minimum_std - std)^2
-    return loss
+    std = torch.std(pred - target, dim=(-1), unbiased=True)
+    if std.mean() < minimum_std:
+        std = std.pow(-1)
+    else:
+        std = 0
+    return std
 
 def cLoss(pred, target):
-    loss = torch.cov(pred, target)
-    return loss^2
+    std_pred = torch.std(pred, dim=(-1), unbiased=True)
+    std_target = torch.std(target, dim=(-1), unbiased=True)
+    loss = (std_pred*std_target).mean()
+    return loss**2
 
 if __name__ == "__main__":
     fetch_data()
