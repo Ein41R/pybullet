@@ -23,6 +23,7 @@ from config import (
     WEIGHT_DECAY,
     LOG_FREQ,
     EMA_DECAY,
+    L_RELEVANCE
 )
 from decoder_model import Decoder
 
@@ -237,8 +238,7 @@ if __name__ == "__main__":
         """
         TODO: implement vic loss here
         """
-
-        loss = iLoss(pred, target) + vLoss(pred, target) + cLoss(pred, target)
+        loss = L_RELEVANCE[0] * iLoss(pred, target) + L_RELEVANCE[1] * vLoss(pred, target) + L_RELEVANCE[2] * cLoss(pred, target)
 
 
         loss_acc += loss
