@@ -48,6 +48,7 @@ if __name__ == "__main__":
                 # then decode only the last predicted embedding -> one token
                 x = model.forward(prompt)
                 y = model.predict(x)
+                print(f"Standart deviation: {torch.std(y).item():.4f}")
                 idx_next = decoder.generate(y, top_k=3)
                 token = bytes(idx_next.item())
                 if  bytes("\x00", "utf-8") in token:
@@ -61,4 +62,5 @@ if __name__ == "__main__":
                 # stream each token so output is visible immediately
                 print(token, end="", flush=True)
                 prompt = torch.cat((prompt, idx_next), dim=1)
+
         print()

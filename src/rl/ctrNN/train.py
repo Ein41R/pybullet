@@ -159,10 +159,10 @@ Keeps standard deviation over certain minimum.
 Ignores variance completely once std is above minimum.
 """
 def vLoss(pred, target):  
-    minimum_std = 1e-6
+    minimum_std = 0.9
     std = torch.std(pred - target, dim=(-1), unbiased=True)
     if std.mean() < minimum_std:
-        std = std.pow(-1)
+        std = std.pow(-1).mean()
     else:
         std = 0
     return std
