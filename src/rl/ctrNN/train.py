@@ -150,6 +150,19 @@ def get_batch(split):
 def eval(model):
     model.eval()
 
+def iLoss(pred, target):
+    # L1 loss between predicted and target embeddings
+    return F.l1_loss(pred, target)
+
+def vLoss(pred, target): #B,T,D
+    minimum_std = 1e-6
+    std = torch.std(pred, target, dim=-1)
+    loss = (minimum_std - std)^2
+    return loss
+
+def cLoss(pred, target):
+    loss = torch.cov(pred, target)
+    return loss^2
 
 if __name__ == "__main__":
     fetch_data()
@@ -169,7 +182,7 @@ if __name__ == "__main__":
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
     )
-    # separate optimizer for the decoder (probing head trained in tangent)
+    # separate optimizer for the decoder
     decoder_optimizer = torch.optim.AdamW(
         decoder.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
     )
@@ -212,7 +225,11 @@ if __name__ == "__main__":
         #pred = pred
         target = target.float()
 
-        loss = vLoss + cLoss
+        """
+        TODO: implement vic loss here
+        """
+
+        loss = iLoss(pred, target) + vLoss(pred, target) + cLoss(pred, target)
 
 
         loss_acc += loss
