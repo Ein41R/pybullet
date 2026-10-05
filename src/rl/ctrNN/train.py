@@ -152,21 +152,12 @@ def eval(model):
     model.eval()
 
 def iLoss(pred, target):
-    # L1 loss between predicted and target embeddings
-    return F.l1_loss(pred, target)
+    return F.smooth_l1_loss(pred, target)
 
-""" EXPLANATION
-Keeps standard deviation over certain minimum.
-Ignores variance completely once std is above minimum.
-"""
-def vLoss(pred, target):  
-    minimum_std = 0.9
-    std = torch.std(pred - target, dim=(-1), unbiased=True)
-    if std.mean() < minimum_std:
-        std = std.pow(-1).mean()
-    else:
-        std = 0
-    return std
+def vLoss(pred, target_var=1.0): #VicReg style now
+    pred = pred.reshape(-1, pred.shape[-1]) #D
+    std = torch.sqrt(torch.var(pred, dim=0, unbiased=True) + 1e-06) #+1e-04 to avoid div by 0 at sqrt
+    return F.relu(target_var - std).pow(2).mean()
 
 def cLoss(pred, target):
     std_pred = torch.std(pred, dim=(-1), unbiased=True)
@@ -238,7 +229,10 @@ if __name__ == "__main__":
         """
         TODO: implement vic loss here
         """
-        loss = L_RELEVANCE[0] * iLoss(pred, target) + L_RELEVANCE[1] * vLoss(pred, target) + L_RELEVANCE[2] * cLoss(pred, target)
+        loss = (
+            L_RELEVANCE[0] * iLoss(pred, target)
+            + L_RELEVANCE[1] * vLoss(pred, target)
+        )
 
 
         loss_acc += loss
