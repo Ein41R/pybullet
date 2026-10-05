@@ -154,7 +154,11 @@ def eval(model):
 def iLoss(pred, target):
     return F.smooth_l1_loss(pred, target)
 
-def vLoss(pred, target_var=1.0): #VicReg style now
+# def vLoss(pred, target_std=1.0):
+#     std = torch.std(pred, dim=(-1), unbiased=True)
+#     if std < target_std:
+
+def vLoss(pred, target_var=1.0): #VicReg style by deepseek
     pred = pred.reshape(-1, pred.shape[-1]) #D
     std = torch.sqrt(torch.var(pred, dim=0, unbiased=True) + 1e-06) #+1e-04 to avoid div by 0 at sqrt
     return F.relu(target_var - std).pow(2).mean()
