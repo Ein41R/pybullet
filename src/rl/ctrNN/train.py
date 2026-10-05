@@ -154,20 +154,25 @@ def eval(model):
 def iLoss(pred, target):
     return F.smooth_l1_loss(pred, target)
 
-# def vLoss(pred, target_std=1.0):
-#     std = torch.std(pred, dim=(-1), unbiased=True)
-#     if std < target_std:
+def vLoss(pred, target_std=1.0):
+    std = torch.std(pred, dim=(-1), unbiased=True).mean()
+    if std < target_std:
+        loss = 1/std
+    else:
+        loss = 0
+    return loss
 
-def vLoss(pred, target_var=1.0): #VicReg style by deepseek
-    pred = pred.reshape(-1, pred.shape[-1]) #D
-    std = torch.sqrt(torch.var(pred, dim=0, unbiased=True) + 1e-06) #+1e-04 to avoid div by 0 at sqrt
-    return F.relu(target_var - std).pow(2).mean()
+# def vLoss(pred, target_var=0.7): #VicReg style by deepseek
+#     pred = pred.reshape(-1, pred.shape[-1]) #D
+#     std = torch.sqrt(torch.var(pred, dim=0, unbiased=True) + 1e-06) #+1e-04 to avoid div by 0 at sqrt
+#     return F.relu(target_var - std).pow(2).mean()
 
 def cLoss(pred, target):
-    std_pred = torch.std(pred, dim=(-1), unbiased=True)
-    std_target = torch.std(target, dim=(-1), unbiased=True)
-    loss = (std_pred*std_target).mean()
-    return loss**2
+    return 0
+#     std_pred = torch.std(pred, dim=(-1), unbiased=True)
+#     std_target = torch.std(target, dim=(-1), unbiased=True)
+#     loss = (std_pred*std_target).mean()
+#     return loss**2
 
 if __name__ == "__main__":
     fetch_data()
@@ -235,7 +240,7 @@ if __name__ == "__main__":
         """
         loss = (
             L_RELEVANCE[0] * iLoss(pred, target)
-            + L_RELEVANCE[1] * vLoss(pred, target)
+            + L_RELEVANCE[1] * vLoss(pred)
         )
 
 
@@ -302,4 +307,10 @@ if __name__ == "__main__":
     print(
         f"decoder on predicted emb: ce {pred_ce.item():.3} acc {pred_acc.item():.3} "
         f"ppl {math.exp(min(pred_ce.item(), 20)):.1}"
+    )
+    print(
+        f"iLoss: {iLoss(pred, target).item():.3f}, "
+        f"vLoss: {vLoss(pred, target).item():.3f}, "
+        f"pred.std: {pred.std(dim=(0, 1)).mean().item():.3f}, "
+        f"target.std: {target.std(dim=(0, 1)).mean().item():.3f}"
     )
