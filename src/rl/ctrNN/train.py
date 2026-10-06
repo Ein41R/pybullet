@@ -229,7 +229,11 @@ if __name__ == "__main__":
         # Training on both predicted and target. 
         tgt_logits, tgt_dec_loss = decoder(target, y)
         pred_logits, pred_dec_loss = decoder(pred.detach(), y)
-        dec_loss = 0.5 * (tgt_dec_loss + pred_dec_loss)
+        dec_loss = 0.5 * (tgt_dec_loss + pred_dec_loss) #effort to minimize cross entropy 
+        # c = 0.1
+        # dec_loss += c * vLoss(pred_logits) + c * vLoss(tgt_logits) #variance loss enforces pred and target != const
+
+
         loss_decoder += dec_loss.detach()
         # decoder telemetry: token accuracy over the target chunk
         dec_correct += (pred_logits.detach().argmax(dim=-1) == y).sum().item()
