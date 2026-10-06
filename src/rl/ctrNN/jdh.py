@@ -90,10 +90,11 @@ class Predictor(torch.nn.Module):
 
         # self.pos_embed = nn.Parameter(torch.zeros(1, self.t_tgt, D).normal_(std=0.02)) #(B,1,T,D)
         self.net = nn.Sequential(
-            nn.LayerNorm(D),
+            # nn.LayerNorm(D),
             nn.Linear(D, D), 
             nn.GELU(), 
             nn.Linear(D, D),
+            # nn.GELU()
             )
 
         #self attention

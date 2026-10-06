@@ -120,23 +120,24 @@ def fetch_data():
 
 
 def get_batch(split):
-    # x is the context chunk, y is the DISJOINT target chunk that follows it
-    # (no overlap -> the JEPA task is not trivial)
     data = np.memmap(INPUT_FILE_PATH, dtype=np.uint8, mode="r")
     if split == "train":
         data = data[: int(0.9 * len(data))]
     else:
         data = data[int(0.9 * len(data)) :]
     ix = torch.randint(len(data) - BLOCK_SIZE - TARGET_SIZE, (BATCH_SIZE,))
+    i = 0
     x = torch.stack(
-        [torch.from_numpy((data[i : i + BLOCK_SIZE]).astype(np.int64)) for i in ix]
+        [torch.from_numpy((data[i : i + BLOCK_SIZE]).astype(np.int64)) 
+         #for i in ix
+         ]
     )
     y = torch.stack(
         [
             torch.from_numpy(
                 (data[i + BLOCK_SIZE : i + BLOCK_SIZE + TARGET_SIZE]).astype(np.int64)
             )
-            for i in ix
+            #for i in ix
         ]
     )
     if torch.cuda.is_available():
