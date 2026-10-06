@@ -6,7 +6,7 @@ from jdh import JDHConfig
 from jdh import JDH
 from decoder_model import Decoder
 
-max_new_tokens = 10
+max_new_tokens = 100
 
 env = LoadEnv()
 if __name__ == "__main__":
@@ -52,7 +52,12 @@ if __name__ == "__main__":
                 x = model.forward(prompt)
                 y = model.predict(x)
                 # print(f"Standart deviation: {torch.std(y).item():.4f}")
-                idx_next = decoder.generate(y, top_k=3)
+
+                # idx_next = decoder.generate(y, top_k=3)
+                with torch.no_grad():
+                    logits, _ = decoder(y)
+                    idx_next = torch.argmax(logits[:, -1, :], dim=-1, keepdim=True)
+                
                 token = bytes([idx_next.item()])
                 if  bytes("\x00", "utf-8") in token:
                     collapse_count += 1
