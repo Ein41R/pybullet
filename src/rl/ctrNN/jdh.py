@@ -89,7 +89,12 @@ class Predictor(torch.nn.Module):
         self.t_tgt = target_T #target sequence length
 
         # self.pos_embed = nn.Parameter(torch.zeros(1, self.t_tgt, D).normal_(std=0.02)) #(B,1,T,D)
-        self.net = nn.Sequential(nn.Linear(D, D), nn.GELU(), nn.Linear(D, D)) #Non linearity inbetween predictor
+        self.net = nn.Sequential(
+            nn.LayerNorm(D),
+            nn.Linear(D, D), 
+            nn.GELU(), 
+            nn.Linear(D, D),
+            )
 
         #self attention
         self.Wq = nn.Linear(D, D, bias=False)

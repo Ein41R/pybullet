@@ -241,9 +241,9 @@ if __name__ == "__main__":
         TODO: implement vic loss here
         """
         loss = (
-            L_RELEVANCE[0] * iLoss(pred, target)
-            + L_RELEVANCE[1] * vLoss(pred) + L_RELEVANCE[1] * vLoss(target) 
-            + L_RELEVANCE[2] * cLoss(pred) + L_RELEVANCE[2] * cLoss(target)
+            L_RELEVANCE[0] * iLoss(pred, target) #L1 loss enforces pred~=target
+            + L_RELEVANCE[1] * vLoss(pred) + L_RELEVANCE[1] * vLoss(target)  #variance loss enforces pred and target != const
+            + L_RELEVANCE[2] * cLoss(pred) + L_RELEVANCE[2] * cLoss(target)  #covariance loss enforces linear independence
         )
 
 
@@ -256,6 +256,7 @@ if __name__ == "__main__":
         # decoder trains on its own loss (tangent to the JEPA objective)
         scaler.scale(dec_loss).backward()
         scaler.step(decoder_optimizer)
+        scaler.update()
         ema_update()
 
         x, y = get_batch("train")
