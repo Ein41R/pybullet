@@ -14,4 +14,6 @@ LEARNING_RATE = 5e-3
 WEIGHT_DECAY = 0.1
 LOG_FREQ = 100
 EMA_DECAY = 0.99        # momentum of the target encoder EMA update
-L_RELEVANCE = [1,1,0.05]  # [iLoss, vLoss, cLoss] relevance weights for the loss function
+L_RELEVANCE = [0.6 ,1 ,0.05]  # [iLoss, vLoss, cLoss] relevance weights for the loss function
+L_DECODABILITY = 0.5  # weight for the decoder-readability term on predicted embeddings
+BUFFER = 128

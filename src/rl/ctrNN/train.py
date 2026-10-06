@@ -23,7 +23,9 @@ from config import (
     WEIGHT_DECAY,
     LOG_FREQ,
     EMA_DECAY,
-    L_RELEVANCE
+    L_RELEVANCE,
+    L_DECODABILITY,
+    BUFFER
 )
 from decoder_model import Decoder
 
@@ -126,10 +128,10 @@ def get_batch(split):
     else:
         data = data[int(0.9 * len(data)) :]
     ix = torch.randint(len(data) - BLOCK_SIZE - TARGET_SIZE, (BATCH_SIZE,))
-    i = 0
+    # i = 0
     x = torch.stack(
         [torch.from_numpy((data[i : i + BLOCK_SIZE]).astype(np.int64)) 
-         #for i in ix
+         for i in ix
          ]
     )
     y = torch.stack(
@@ -137,7 +139,7 @@ def get_batch(split):
             torch.from_numpy(
                 (data[i + BLOCK_SIZE : i + BLOCK_SIZE + TARGET_SIZE]).astype(np.int64)
             )
-            #for i in ix
+            for i in ix
         ]
     )
     if torch.cuda.is_available():
@@ -164,7 +166,7 @@ def iLoss(pred, target):
 #         loss = 0
 #     return loss
 
-def vLoss(pred, target_var=0.7): #VicReg style by deepseek
+def vLoss(pred, target_var=0.4): #VicReg style by deepseek
     pred = pred.reshape(-1, pred.shape[-1]) #D
     # std = torch.sqrt(torch.var(pred, dim=0, unbiased=True) + 1e-06) #+1e-04 to avoid div by 0 at sqrt
     std = torch.std(pred, dim=0, unbiased=True).mean()
@@ -228,19 +230,27 @@ if __name__ == "__main__":
 
         # Training on both predicted and target. 
         tgt_logits, tgt_dec_loss = decoder(target, y)
-        pred_logits, pred_dec_loss = decoder(pred.detach(), y)
-        dec_loss = 0.5 * (tgt_dec_loss + pred_dec_loss) #effort to minimize cross entropy 
+        # pred_logits, pred_dec_loss = decoder(pred.detach(), y)
+        # dec_loss = 0.5 * (tgt_dec_loss + pred_dec_loss) #effort to minimize cross entropy 
         # c = 0.1
         # dec_loss += c * vLoss(pred_logits) + c * vLoss(tgt_logits) #variance loss enforces pred and target != const
-
+        dec_loss = tgt_dec_loss #only train on target embeddings for now
 
         loss_decoder += dec_loss.detach()
         # decoder telemetry: token accuracy over the target chunk
-        dec_correct += (pred_logits.detach().argmax(dim=-1) == y).sum().item()
+        dec_correct += (tgt_logits.detach().argmax(dim=-1) == y).sum().item()
+        # dec_correct += (pred_logits.detach().argmax(dim=-1) == y).sum().item()
         dec_tokens += y.numel()
 
         #pred = pred
         target = target.float()
+
+        # Decodability: make the *predicted* embeddings readable by the decoder.
+        # Gradient flows through pred into the encoder (and weakly into the
+        # decoder, whose training is dominated by the target term above). This
+        # is the missing signal that lets the encoder produce embeddings the
+        # decoder can actually turn back into tokens.
+        _, pred_dec_loss = decoder(pred, y)
 
         """
         TODO: implement vic loss here
@@ -249,6 +259,7 @@ if __name__ == "__main__":
             L_RELEVANCE[0] * iLoss(pred, target) #L1 loss enforces pred~=target
             + L_RELEVANCE[1] * vLoss(pred) + L_RELEVANCE[1] * vLoss(target)  #variance loss enforces pred and target != const
             + L_RELEVANCE[2] * cLoss(pred) + L_RELEVANCE[2] * cLoss(target)  #covariance loss enforces linear independence
+            + L_DECODABILITY * pred_dec_loss  # predicted embeddings must decode to the right tokens
         )
 
 
