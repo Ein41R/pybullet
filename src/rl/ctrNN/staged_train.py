@@ -62,6 +62,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 JDH_CONFIG = jdh.JDHConfig()
 INPUT_FILE_PATH = env_loader._resolve_path("JDH_INPUT_FILE", Path(__file__).resolve().parent / "input.txt")
 MODEL_PATH = env_loader._resolve_path("JDH_MODEL_PATH", Path(__file__).resolve().parent / "parameters" / "JDH_model.pt")
+MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 def fetch_data():
     if not INPUT_FILE_PATH.exists():
@@ -137,3 +138,15 @@ if __name__ == "__main__":
                 f"decoder ce {dec_loss_value:.3} acc {dec_acc:.3} ppl {math.exp(min(dec_loss_value, 20)):.1} |"
             )
             dec_acc = 0
+
+        print("STAGE 1: training completed, saving models...")
+
+        #not saving ema since you could just use encoder for both
+        torch.save(src_encoder.state_dict(), MODEL_PATH.parent / "JDH_model_encoder.pt")
+        torch.save(decoder.state_dict(), MODEL_PATH.parent / "JDH_model_decoder.pt")
+
+    """
+    STAGE 2:
+    Training the predictor
+    """
+    for step in range(MAX_ITERS):
