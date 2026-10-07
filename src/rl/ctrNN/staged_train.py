@@ -68,14 +68,17 @@ def fetch_data():
         with open(INPUT_FILE_PATH, "w", encoding="utf-8") as f:
             f.write(requests.get(data_url).text)
 
-def get_batch():
+def get_batch(mode="encode"):
     data = torch.memmap.mmap(INPUT_FILE_PATH.open("r+b").fileno(), 0)
     ix = torch.randint(len(data) - BLOCK_SIZE, (BATCH_SIZE,))
     # for now batches of fixed length
     x = torch.stack([torch.tensor(data[i : i + BLOCK_SIZE], dtype=torch.long) for i in ix])
-    y = torch.stack([torch.tensor(data[i : i + BLOCK_SIZE + TARGET_SIZE], dtype=torch.long) for i in ix])
-    x, y = x.to(device), y.to(device)
-
+    if mode == "encode":
+        return x.to(device)
+    elif mode == "predict":
+        y = torch.stack([torch.tensor(data[i : i + BLOCK_SIZE + TARGET_SIZE], dtype=torch.long) for i in ix])
+        x, y = x.to(device), y.to(device)
+        return x, y
 
 if __name__ == "__main__":
     if not PROJECT_ROOT.input.txt.exists():
