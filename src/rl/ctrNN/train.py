@@ -166,7 +166,7 @@ def iLoss(pred, target):
 #         loss = 0
 #     return loss
 
-def vLoss(pred, target_var=0.4): #VicReg style by deepseek
+def vLoss(pred, target_var=0.7): #VicReg style by deepseek
     pred = pred.reshape(-1, pred.shape[-1]) #D
     # std = torch.sqrt(torch.var(pred, dim=0, unbiased=True) + 1e-06) #+1e-04 to avoid div by 0 at sqrt
     std = torch.std(pred, dim=0, unbiased=True).mean()
@@ -215,6 +215,7 @@ if __name__ == "__main__":
     loss_steps = 0
     dec_correct = 0 # number of correct predictions by the decoder
     dec_tokens = 0
+    log_vLoss = 0
     for step in range(MAX_ITERS):
         optimizer.zero_grad(set_to_none=True)
         decoder_optimizer.zero_grad(set_to_none=True)
@@ -257,10 +258,13 @@ if __name__ == "__main__":
         """
         loss = (
             L_RELEVANCE[0] * iLoss(pred, target) #L1 loss enforces pred~=target
-            + L_RELEVANCE[1] * vLoss(pred) + L_RELEVANCE[1] * vLoss(target)  #variance loss enforces pred and target != const
-            + L_RELEVANCE[2] * cLoss(pred) + L_RELEVANCE[2] * cLoss(target)  #covariance loss enforces linear independence
-            + L_DECODABILITY * pred_dec_loss  # predicted embeddings must decode to the right tokens
+            + L_RELEVANCE[1] * vLoss(pred, target_var=0.4)
+            #+ L_RELEVANCE[1] * vLoss(pred) + L_RELEVANCE[1] * vLoss(target)  #variance loss enforces pred and target != const
+            #+ L_RELEVANCE[2] * cLoss(pred) + L_RELEVANCE[2] * cLoss(target)  #covariance loss enforces linear independence
+            #+ L_DECODABILITY * pred_dec_loss  # predicted embeddings must decode to the right tokens
         )
+
+        log_vLoss += vLoss(pred, target_var=0.4).item()/LOG_FREQ
 
 
         loss_acc += loss
@@ -283,13 +287,16 @@ if __name__ == "__main__":
             print(
                 f"Step: {step}/{MAX_ITERS} "
                 f"jepa {loss_acc.item() / loss_steps:.3} | "
-                f"decoder ce {dec_ce:.3} acc {dec_acc:.3} ppl {math.exp(min(dec_ce, 20)):.1}"
+                f"decoder ce {dec_ce:.3} acc {dec_acc:.3} ppl {math.exp(min(dec_ce, 20)):.1} |"
+                f"pred acc {dec_acc:.3} std {pred.std().item():.3} | "
             )
             loss_acc = 0
             loss_steps = 0
             loss_decoder = 0
             dec_correct = 0
             dec_tokens = 0
+            dec_acc = 0
+            log_vLoss = 0
 
     print("Training done, saving model")
 
