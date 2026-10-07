@@ -229,12 +229,10 @@ if __name__ == "__main__":
 
         pred = pred.float()
 
-        # Training on both predicted and target. 
+        # Train the probe on target embeddings only. The predicted loss is
+        # applied below with the probe parameters frozen, so it cannot learn
+        # to decode a collapsed predictor.
         tgt_logits, tgt_dec_loss = decoder(target, y)
-        pred_logits, pred_dec_loss = decoder(pred.detach(), y)
-        # dec_loss = 0.5 * (tgt_dec_loss + pred_dec_loss) #effort to minimize cross entropy 
-        # c = 0.1
-        # dec_loss += c * vLoss(pred_logits) + c * vLoss(tgt_logits) #variance loss enforces pred and target != const
         dec_loss = tgt_dec_loss #only train on target embeddings for now
 
         loss_decoder += dec_loss.detach()
@@ -246,12 +244,14 @@ if __name__ == "__main__":
         #pred = pred
         target = target.float()
 
-        # Decodability: make the *predicted* embeddings readable by the decoder.
-        # Gradient flows through pred into the encoder (and weakly into the
-        # decoder, whose training is dominated by the target term above). This
-        # is the missing signal that lets the encoder produce embeddings the
-        # decoder can actually turn back into tokens.
-        _, pred_dec_loss = decoder(pred, y)
+        # Decodability: make predicted embeddings readable by the trained
+        # probe, while preventing this loss from updating the probe itself.
+        decoder_requires_grad = [parameter.requires_grad for parameter in decoder.parameters()]
+        for parameter in decoder.parameters():
+            parameter.requires_grad_(False)
+        pred_logits, pred_dec_loss = decoder(pred, y)
+        for parameter, requires_grad in zip(decoder.parameters(), decoder_requires_grad):
+            parameter.requires_grad_(requires_grad)
 
         """
         TODO: implement vic loss here
@@ -260,10 +260,9 @@ if __name__ == "__main__":
         pred_acc = (pred_logits.argmax(dim=-1) == y).float().mean() +1e-4
         loss = (
             L_RELEVANCE[0] * iLoss(pred, target) #L1 loss enforces pred~=target
-            # + L_RELEVANCE[1] * v_loss
             # + 1/pred_acc
-            #+ L_RELEVANCE[1] * vLoss(pred) + L_RELEVANCE[1] * vLoss(target)  #variance loss enforces pred and target != const
-            #+ L_RELEVANCE[2] * cLoss(pred) + L_RELEVANCE[2] * cLoss(target)  #covariance loss enforces linear independence
+            + L_RELEVANCE[1] * vLoss(pred) + L_RELEVANCE[1] * vLoss(target)  #variance loss enforces pred and target != const
+            + L_RELEVANCE[2] * cLoss(pred) + L_RELEVANCE[2] * cLoss(target)  #covariance loss enforces linear independence
             + L_DECODABILITY * pred_dec_loss  # predicted embeddings must decode to the right tokens
         )
         log_vLoss += v_loss.item()/LOG_FREQ
@@ -272,12 +271,16 @@ if __name__ == "__main__":
         loss_acc += loss
         loss_steps += 1
 
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-        # decoder trains on its own loss (tangent to the JEPA objective)
+        # Backpropagate both losses before either optimizer mutates a tensor
+        # saved by autograd. The predictor loss does not accumulate decoder
+        # gradients because decoder parameters were frozen above.
         scaler.scale(dec_loss).backward()
+        scaler.scale(loss).backward()
+
+        # Update the decoder only from embeddings produced by the target
+        # encoder, never from the predictor's decodability objective.
         scaler.step(decoder_optimizer)
+        scaler.step(optimizer)
         scaler.update()
         ema_update()
 
