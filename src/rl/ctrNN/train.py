@@ -295,6 +295,12 @@ if __name__ == "__main__":
                 f"decoder ce {dec_ce:.3} acc {dec_acc:.3} ppl {math.exp(min(dec_ce, 20)):.1} |"
                 f"pred acc {pred_acc:.3} std {pred.std().item():.3} ce {pred_dec_loss:.3}| "
             )
+            print(
+                pred.std().item(),
+                target.std().item(),
+                pred_dec_loss.item(),
+                model.pred.net[0].weight.grad.norm().item(),
+            )
             loss_acc = 0
             loss_steps = 0
             loss_decoder = 0
