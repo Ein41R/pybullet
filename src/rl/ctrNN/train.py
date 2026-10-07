@@ -27,6 +27,7 @@ from config import (
     L_DECODABILITY,
     BUFFER
 )
+
 from decoder_model import Decoder
 
 '''

@@ -9,7 +9,7 @@ redefining them locally.
 BLOCK_SIZE = 512        # context chunk length
 TARGET_SIZE = 2        # target chunk length (must match Predictor.t_tgt)
 BATCH_SIZE = 32
-MAX_ITERS = 2500
+MAX_ITERS = 500
 LEARNING_RATE = 5e-3
 WEIGHT_DECAY = 0.1
 LOG_FREQ = 100
