@@ -133,17 +133,17 @@ if __name__ == "__main__":
             feature_loss_value = feature_loss.detach().item()
             dec_loss_value = dec_loss.detach().item()
             print(
-                f"step {step:>4d} | "
+                f"step [{step:4d}/{MAX_ITERS}] | "
                 f"feature loss {feature_loss_value:.3} | "
                 f"decoder ce {dec_loss_value:.3} acc {dec_acc:.3} ppl {math.exp(min(dec_loss_value, 20)):.1} |"
             )
             dec_acc = 0
 
-        print("STAGE 1: training completed, saving models...")
+    print("STAGE 1: training completed, saving models...")
 
-        #not saving ema since you could just use encoder for both
-        torch.save(src_encoder.state_dict(), MODEL_PATH.parent / "JDH_model_encoder.pt")
-        torch.save(decoder.state_dict(), MODEL_PATH.parent / "JDH_model_decoder.pt")
+    #not saving ema since you could just use encoder for both
+    torch.save(src_encoder.state_dict(), MODEL_PATH.parent / "JDH_model_encoder.pt")
+    torch.save(decoder.state_dict(), MODEL_PATH.parent / "JDH_model_decoder.pt")
 
     """
     STAGE 2:
