@@ -123,7 +123,7 @@ if __name__ == "__main__":
             tgt_pred = src_enc_nn.predict(src_emb)
 
         tgt_emb = tgt_emb[:, -1, :]
-        tgt_pred = tgt_pred[:, -1, :]
+        tgt_pred = tgt_pred[:, -1:, :]
 
         loss = F.mse_loss(tgt_pred, tgt_emb)
 
@@ -136,4 +136,5 @@ if __name__ == "__main__":
 
     print("STAGE 2:Training completed. Saving the model...")
 
-    torch.save(src_enc_nn.state_dict(), env_loader._resolve_path("JDH_MODEL_PATH", Path(__file__).resolve().parent / "parameters" / "JDH_model_with_predictor.pt"))
+    torch.save(src_enc_nn.state_dict(), env_loader._resolve_path("MODEL_PATH", Path(__file__).resolve().parent / "parameters") / "JDH_model_with_predictor.pt")
+    print(f"Model saved to {env_loader._resolve_path('MODEL_PATH', Path(__file__).resolve().parent / 'parameters') / 'JDH_model_with_predictor.pt'}")
