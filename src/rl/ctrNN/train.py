@@ -231,7 +231,7 @@ if __name__ == "__main__":
 
         # Training on both predicted and target. 
         tgt_logits, tgt_dec_loss = decoder(target, y)
-        # pred_logits, pred_dec_loss = decoder(pred.detach(), y)
+        pred_logits, pred_dec_loss = decoder(pred.detach(), y)
         # dec_loss = 0.5 * (tgt_dec_loss + pred_dec_loss) #effort to minimize cross entropy 
         # c = 0.1
         # dec_loss += c * vLoss(pred_logits) + c * vLoss(tgt_logits) #variance loss enforces pred and target != const
@@ -256,15 +256,17 @@ if __name__ == "__main__":
         """
         TODO: implement vic loss here
         """
+        v_loss = vLoss(pred, target_var=0)
+        pred_acc = (pred_logits.argmax(dim=-1) == y).float().mean() +1e-4
         loss = (
             L_RELEVANCE[0] * iLoss(pred, target) #L1 loss enforces pred~=target
-            + L_RELEVANCE[1] * vLoss(pred, target_var=0.4)
+            # + L_RELEVANCE[1] * v_loss
+            # + 1/pred_acc
             #+ L_RELEVANCE[1] * vLoss(pred) + L_RELEVANCE[1] * vLoss(target)  #variance loss enforces pred and target != const
             #+ L_RELEVANCE[2] * cLoss(pred) + L_RELEVANCE[2] * cLoss(target)  #covariance loss enforces linear independence
-            #+ L_DECODABILITY * pred_dec_loss  # predicted embeddings must decode to the right tokens
+            + L_DECODABILITY * pred_dec_loss  # predicted embeddings must decode to the right tokens
         )
-
-        log_vLoss += vLoss(pred, target_var=0.4).item()/LOG_FREQ
+        log_vLoss += v_loss.item()/LOG_FREQ
 
 
         loss_acc += loss
@@ -288,7 +290,7 @@ if __name__ == "__main__":
                 f"Step: {step}/{MAX_ITERS} "
                 f"jepa {loss_acc.item() / loss_steps:.3} | "
                 f"decoder ce {dec_ce:.3} acc {dec_acc:.3} ppl {math.exp(min(dec_ce, 20)):.1} |"
-                f"pred acc {dec_acc:.3} std {pred.std().item():.3} | "
+                f"pred acc {pred_acc:.3} std {pred.std().item():.3} ce {pred_dec_loss:.3}| "
             )
             loss_acc = 0
             loss_steps = 0
