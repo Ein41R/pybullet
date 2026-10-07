@@ -149,4 +149,4 @@ if __name__ == "__main__":
     STAGE 2:
     Training the predictor
     """
-    for step in range(MAX_ITERS):
+#NVM do that in separate file
