@@ -27,8 +27,10 @@ from config import (
 )
 
 from decoder_model import Decoder
-import loadenv
-loadenv.LoadEnv()
+from loadenv import LoadEnv
+
+env_loader = LoadEnv()
+env_loader._load_env_file()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -58,8 +60,8 @@ print(f"Using device: {device} with dtype {dtype}")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 JDH_CONFIG = jdh.JDHConfig()
-INPUT_FILE_PATH = loadenv._resolve_path("JDH_INPUT_FILE", Path(__file__).resolve().parent / "input.txt")
-MODEL_PATH = loadenv._resolve_path("JDH_MODEL_PATH", Path(__file__).resolve().parent / "parameters" / "JDH_model.pt")
+INPUT_FILE_PATH = env_loader._resolve_path("JDH_INPUT_FILE", Path(__file__).resolve().parent / "input.txt")
+MODEL_PATH = env_loader._resolve_path("JDH_MODEL_PATH", Path(__file__).resolve().parent / "parameters" / "JDH_model.pt")
 
 def fetch_data():
     if not INPUT_FILE_PATH.exists():
@@ -69,18 +71,69 @@ def fetch_data():
             f.write(requests.get(data_url).text)
 
 def get_batch(mode="encode"):
-    data = torch.memmap.mmap(INPUT_FILE_PATH.open("r+b").fileno(), 0)
+    data = np.memmap(INPUT_FILE_PATH, dtype=np.uint8, mode="r")
     ix = torch.randint(len(data) - BLOCK_SIZE, (BATCH_SIZE,))
     # for now batches of fixed length
-    x = torch.stack([torch.tensor(data[i : i + BLOCK_SIZE], dtype=torch.long) for i in ix])
-    if mode == "encode":
-        return x.to(device)
-    elif mode == "predict":
-        y = torch.stack([torch.tensor(data[i : i + BLOCK_SIZE + TARGET_SIZE], dtype=torch.long) for i in ix])
+    x = torch.stack([torch.from_numpy(data[i : i + BLOCK_SIZE].astype(np.int64)) for i in ix])
+    y = torch.stack([torch.from_numpy(data[i : i + BLOCK_SIZE + TARGET_SIZE].astype(np.int64)) for i in ix])
+    
+    if torch.cuda.is_available():
+        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
+        device, non_blocking=True
+        )
+    else:
         x, y = x.to(device), y.to(device)
-        return x, y
+    return x, y
 
 if __name__ == "__main__":
-    if not PROJECT_ROOT.input.txt.exists():
-        fetch_data()
-    get_batch()
+    fetch_data()
+
+    decoder = Decoder(JDH_CONFIG).to(device)#.compile()
+    src_encoder = jdh.JDH(JDH_CONFIG).to(device)
+    ema_encoder = copy.deepcopy(src_encoder).to(device).eval()
+    # [p.require_grad_(False) for p in ema_encoder.parameters()]
+
+    src_encoder.compile()
+
+    enc_opt = torch.optim.AdamW(src_encoder.parameters(), lr = LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+    dec_opt = torch.optim.AdamW(decoder.parameters(), lr = LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+
+    @torch.no_grad()
+    def ema_update():
+        for p_online, p_target in zip(src_encoder.parameters(), ema_encoder.parameters()):
+            p_target.mul_(EMA_DECAY).add_(p_online.detach(), alpha=1 - EMA_DECAY)
+
+    """
+    STAGE 1:
+    Train enc and dec only
+    """
+    dec_acc = 0
+    x,_ = get_batch(mode="encode")
+    for step in range(MAX_ITERS):
+        enc_opt.zero_grad(set_to_none=True)
+        dec_opt.zero_grad(set_to_none=True)
+        
+        with ctx: src_emb = src_encoder(x)
+        with ctx, torch.no_grad(): tgt_emb = ema_encoder(x)
+        
+        dec_logits, dec_loss = decoder(src_emb.detach(), x)
+
+        feature_loss = F.mse_loss(src_emb, tgt_emb)
+
+        scaler.scale(dec_loss).backward()
+        scaler.scale(feature_loss).backward()
+        scaler.step(dec_opt)
+        scaler.step(enc_opt)
+        scaler.update()
+        ema_update()
+
+        if step % LOG_FREQ == 0:
+            dec_acc = (dec_logits.argmax(dim=-1) == x).float().mean().item()
+            feature_loss_value = feature_loss.detach().item()
+            dec_loss_value = dec_loss.detach().item()
+            print(
+                f"step {step:>4d} | "
+                f"feature loss {feature_loss_value:.3} | "
+                f"decoder ce {dec_loss_value:.3} acc {dec_acc:.3} ppl {math.exp(min(dec_loss_value, 20)):.1} |"
+            )
+            dec_acc = 0
