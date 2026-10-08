@@ -70,11 +70,11 @@ def get_batch():
     data = np.memmap(INPUT_FILE_PATH, dtype=np.uint8, mode="r")
     ix = torch.randint(len(data) - BLOCK_SIZE, (BATCH_SIZE,))
     x = torch.stack([
-        torch.from_numpy(data[i:i + BLOCK_SIZE - 1].astype(np.int64))
+        torch.from_numpy(data[i:i + BLOCK_SIZE - 32].astype(np.int64))
         for i in ix
     ])
     y = torch.stack([
-        torch.from_numpy(data[i + BLOCK_SIZE - 1:i + BLOCK_SIZE].astype(np.int64))
+        torch.from_numpy(data[i:i + BLOCK_SIZE].astype(np.int64))
         for i in ix
     ])
     if torch.cuda.is_available():
@@ -117,7 +117,7 @@ if __name__ == "__main__":
         
         with ctx, torch.no_grad():
             src_emb = tgt_enc_nn(x)
-            tgt_emb = tgt_enc_nn(y)
+            tgt_emb = tgt_enc_nn(y) #y has 1 token more
 
         with ctx:
             tgt_pred = src_enc_nn.predict(src_emb)
