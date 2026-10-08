@@ -7,7 +7,7 @@ redefining them locally.
 
 # --- data / training ---
 BLOCK_SIZE = 512        # context chunk length
-TARGET_SIZE = 8        # target chunk length (must match Predictor.t_tgt)
+TARGET_SIZE = 32        # target chunk length (must match Predictor.t_tgt)
 BATCH_SIZE = 32
 MAX_ITERS = 500
 LEARNING_RATE = 5e-3

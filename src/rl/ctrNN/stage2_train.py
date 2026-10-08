@@ -116,14 +116,18 @@ if __name__ == "__main__":
         x, y = get_batch()
         
         with ctx, torch.no_grad():
-            src_emb = tgt_enc_nn(x)
-            tgt_emb = tgt_enc_nn(y) #y has 1 token more
+            src_emb = tgt_enc_nn(x) #WARN: comes back with additional B,1,T,D singleton attention head
+            tgt_emb = tgt_enc_nn(y).squeeze(1)
 
         with ctx:
-            tgt_pred = src_enc_nn.predict(src_emb)
+            tgt_pred = src_enc_nn.predict(src_emb) #B,32,D in current config, predicts 32 next tokens(bytes)
 
-        tgt_emb = tgt_emb[:, -1, :]
-        tgt_pred = tgt_pred[:, -1:, :]
+
+        print(f"Sizes of embs: src_emb: {src_emb.size()}, tgt_emb: {tgt_emb.size()}, tgt_pred: {tgt_pred.size()}")
+
+
+        tgt_emb = tgt_emb[:, -32:, :]
+        tgt_pred = tgt_pred[:, -32:, :]
 
         loss = F.mse_loss(tgt_pred, tgt_emb)
 
