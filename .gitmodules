@@ -16,3 +16,6 @@
 [submodule "assets/bullet3"]
 	path = assets/bullet3
 	url = https://github.com/bulletphysics/bullet3
+[submodule "JDH"]
+	path = JDH
+	url = https://github.com/Ein41R/JDH.git
